@@ -56,6 +56,10 @@ const bridge = useBridge('host'); const [quality, setQuality] = useState('balanc
         </div>
       </div>
       <aside className="space-y-4">
+        {!browserCaptureAvailable && <section className="panel-section border border-[#6F6742]" role="note">
+          <h3 className="font-display text-lg font-semibold text-[#F0E9CD]">Full-phone sharing needs the iOS app</h3>
+          <p className="text-[#BAC5B6] text-xs leading-6 mt-2">Safari on this device cannot request permission to broadcast your entire phone screen. ScreenBridge can still watch a computer broadcast here. To send your iPhone screen to a laptop or TV, we need the native ScreenBridge app with Apple's ReplayKit broadcast permission.</p>
+        </section>}
         {live && <section className="panel-section">
           <div className="flex items-center justify-between gap-2 mb-3"><h3 className="font-display text-lg font-semibold">Stay in the moment</h3><span className="text-[10px] text-acid">LIGHTWEIGHT · LIVE</span></div>
           <p className="text-[#91A097] text-xs leading-5 mb-3">The viewer can point to parts of your preview. Send a quick reaction back without interrupting the video.</p>
