@@ -61,8 +61,10 @@ export function useBridge(role){
   room.on(RoomEvent.Disconnected,()=>{
    if(roomRef.current===room){setPeerState('failed');setStatus('failed');setError('LiveKit media disconnected. End the session and create a new room.');}
   });
+  let connectionTimer;
   try{
-   await room.connect(media.url,media.token,{autoSubscribe:true});
+   await Promise.race([room.connect(media.url,media.token,{autoSubscribe:true}),new Promise((_,reject)=>{connectionTimer=setTimeout(()=>reject(new Error('Media connection timed out after 25 seconds. Check LiveKit status and try again.')),25000);})]);
+   clearTimeout(connectionTimer);
    if(roomRef.current!==room){void room.disconnect();return;}
    setPeerState('connected');setError('');setStatus(role==='host'?'ready':'waiting-screen');
    statTimer.current=setInterval(async()=>{
@@ -81,7 +83,7 @@ export function useBridge(role){
      setStats({fps:data?.framesPerSecond?String(Math.round(data.framesPerSecond)):'—',bitrate,latency:'—',quality:'Connected'});
     }catch{/* Older Safari does not expose every video statistic. */}
    },2000);
-  }catch(e){if(roomRef.current===room)resetMedia();throw Error('LiveKit connection failed: '+(e.message||String(e)));}
+  }catch(e){clearTimeout(connectionTimer);if(roomRef.current===room)resetMedia();throw Error('LiveKit connection failed: '+(e.message||String(e)));}
  },[resetMedia,role]);
  useEffect(()=>{
   let active=true;
