@@ -1,5 +1,6 @@
 import {randomBytes, randomUUID} from 'node:crypto';
 import {audit} from './db.js';
+import {isMediaConfigured, createMediaTickets, closeMediaRoom} from './media.js';
 const ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const sessions=new Map();
 const MAX_IDLE_MS=12*60*1000;
@@ -13,8 +14,8 @@ function leavePending(socket,io){const code=socket.data.pendingCode;if(!code)ret
 function finishHost(io,session){io.to(session.hostId).emit('session:ended',{reason:'Session ended'});if(session.viewerId){io.to(session.viewerId).emit('session:ended',{reason:'The sharer ended the session'});const viewer=io.sockets.sockets.get(session.viewerId);if(viewer){viewer.data.activeCode=null;viewer.data.role=null;}}
  for(const id of session.pending.keys()){io.to(id).emit('session:ended',{reason:'This sharing code has expired'});const s=io.sockets.sockets.get(id);if(s)s.data.pendingCode=null;}
  const host=io.sockets.sockets.get(session.hostId);if(host){host.data.activeCode=null;host.data.role=null;}
- sessions.delete(session.code);audit(session.id,'ended');}
-function removeViewer(io,session){if(!session.viewerId)return;const viewer=io.sockets.sockets.get(session.viewerId);if(viewer){viewer.data.activeCode=null;viewer.data.role=null;}session.viewerId=null;io.to(session.hostId).emit('session:viewer-left');}
+ sessions.delete(session.code);audit(session.id,'ended');void closeMediaRoom(session.id);}
+function removeViewer(io,session){if(!session.viewerId)return;const viewer=io.sockets.sockets.get(session.viewerId);if(viewer){viewer.data.activeCode=null;viewer.data.role=null;}session.viewerId=null;io.to(session.hostId).emit('session:viewer-left');void closeMediaRoom(session.id);}
 function cleanup(io,socket){leavePending(socket,io);const code=socket.data.activeCode;if(!code)return;const session=sessions.get(code);if(!session)return;if(session.hostId===socket.id){finishHost(io,session);}else if(session.viewerId===socket.id){removeViewer(io,session);}socket.data.activeCode=null;socket.data.role=null;}
 export function registerSessions(io){
  // Empty, unclaimed invitations expire. A running stream is never automatically ended by this timer.
@@ -22,6 +23,7 @@ export function registerSessions(io){
  io.on('connection',socket=>{
   socket.data.activeCode=null;socket.data.pendingCode=null;
   socket.on('session:create',(_,ack)=>{
+   if(!isMediaConfigured())return safeAck(ack,{ok:false,error:'Video service is not connected yet. Configure your LiveKit Cloud credentials in Render and retry.'});
    if(socket.data.activeCode||socket.data.pendingCode)return safeAck(ack,{ok:false,error:'Leave the current session first.'});
    if(sessions.size>=MAX_SESSIONS)return safeAck(ack,{ok:false,error:'Service is busy. Please try later.'});
    const code=makeCode();const session={code,id:randomUUID(),hostId:socket.id,viewerId:null,pending:new Map(),createdAt:Date.now()};sessions.set(code,session);socket.data.activeCode=code;socket.data.role='host';audit(session.id,'created');safeAck(ack,{ok:true,code,expiresInMinutes:12});
@@ -37,15 +39,18 @@ export function registerSessions(io){
    const name=validName(payload?.name);session.pending.set(socket.id,name);socket.data.pendingCode=code;
    io.to(session.hostId).emit('session:viewer-request',{requestId:socket.id,name});safeAck(ack,{ok:true});
   });
-  socket.on('session:approve',(payload,ack)=>{
+  socket.on('session:approve',async (payload,ack)=>{
    const session=sessions.get(socket.data.activeCode);if(!session||session.hostId!==socket.id)return safeAck(ack,{ok:false,error:'Not authorized.'});
    const id=payload?.requestId;if(typeof id!=='string'||!session.pending.has(id))return safeAck(ack,{ok:false,error:'Request no longer available.'});
    if(session.viewerId)return safeAck(ack,{ok:false,error:'A viewer is already connected.'});
+   let media;
+   try {media=await createMediaTickets(session.id);}catch(error){console.error('LiveKit authorization:',error.message);return safeAck(ack,{ok:false,error:'Could not prepare secure video access. Check the LiveKit configuration.'});}
+   if(sessions.get(session.code)!==session||session.viewerId||!session.pending.has(id))return safeAck(ack,{ok:false,error:'Session request expired. Please try again.'});
    session.viewerId=id;session.pending.delete(id);
    const viewer=io.sockets.sockets.get(id);if(!viewer){session.viewerId=null;return safeAck(ack,{ok:false,error:'Viewer disconnected.'});}
    viewer.data.pendingCode=null;viewer.data.activeCode=session.code;viewer.data.role='viewer';
    for(const pendingId of session.pending.keys()){io.to(pendingId).emit('session:declined',{reason:'The sharer accepted another viewer.'});const p=io.sockets.sockets.get(pendingId);if(p)p.data.pendingCode=null;}session.pending.clear();
-   io.to(session.hostId).emit('session:approved',{role:'host'});io.to(id).emit('session:approved',{role:'viewer'});audit(session.id,'approved');safeAck(ack,{ok:true});
+   io.to(session.hostId).emit('session:approved',{role:'host',media:media.host});io.to(id).emit('session:approved',{role:'viewer',media:media.viewer});audit(session.id,'approved');safeAck(ack,{ok:true});
   });
   socket.on('session:decline',(payload)=>{
    const session=sessions.get(socket.data.activeCode);if(!session||session.hostId!==socket.id)return;

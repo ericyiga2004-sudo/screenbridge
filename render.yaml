@@ -4,11 +4,17 @@ services:
     name: screenbridge-api
     runtime: node
     plan: free
-    buildCommand: npm ci --omit=dev
+    buildCommand: npm install --omit=dev
     startCommand: npm start -w @screenbridge/api
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: WEB_ORIGIN
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
         sync: false

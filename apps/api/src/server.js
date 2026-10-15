@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import {Server} from 'socket.io';
 import {connectOptionalDatabase} from './db.js';
 import {registerSessions} from './sessions.js';
+import {isMediaConfigured} from './media.js';
 const app=express();
 const origin=process.env.WEB_ORIGIN || 'http://localhost:5173';
 const allowed=process.env.NODE_ENV!=='production' ? true : origin.split(',').map(x=>x.trim());
@@ -15,7 +16,8 @@ app.use(helmet({contentSecurityPolicy:false,crossOriginEmbedderPolicy:false}));
 app.use(cors({origin:allowed}));
 app.use(express.json({limit:'16kb'}));
 app.use('/api',rateLimit({windowMs:60_000,limit:120,standardHeaders:'draft-7',legacyHeaders:false}));
-app.get('/api/health',(_req,res)=>res.json({ok:true,app:'ScreenBridge',timestamp:new Date().toISOString()}));
+app.get('/api/health',(_req,res)=>res.json({ok:true,app:'ScreenBridge',mediaProvider:'LiveKit',mediaConfigured:isMediaConfigured(),timestamp:new Date().toISOString()}));
+app.get('/api/media-status',(_req,res)=>res.json({provider:'LiveKit Cloud',configured:isMediaConfigured(),desktopShare:true,nativePhoneCapture:false}));
 app.get('/api/ice-config',(_req,res)=>{
  const urls=String(process.env.TURN_URLS||'').split(',').map(v=>v.trim()).filter(Boolean);
  const iceServers=[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}];
