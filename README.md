@@ -74,3 +74,8 @@ screenbridge/
 - No claim of finished production-grade uptime: test on your browsers/devices, configure TURN, security/abuse protections and monitoring.
 
 See `docs/ARCHITECTURE.md` and `docs/NEXT_STEPS.md` for implementation notes and future work.
+
+
+## v2 media transport
+
+ScreenBridge now uses LiveKit Cloud for video transport instead of direct browser P2P. Configure the LiveKit URL/key/secret **only on Render**. See [setup guide](docs/LIVEKIT_SETUP.md). Full iPhone screen broadcasting requires a separate native ReplayKit extension and is not a web capability.

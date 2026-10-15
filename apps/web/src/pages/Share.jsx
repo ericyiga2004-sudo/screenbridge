@@ -17,7 +17,7 @@ export default function Share() {
 const bridge = useBridge('host'); const [quality, setQuality] = useState('balanced'); const [copied, setCopied] = useState(''); const localVideoRef = useRef(null); const localStageRef = useRef(null); const [lastReaction,setLastReaction] = useState(null); const live = bridge.status === 'streaming'; const elapsed = useElapsed(live);
   useEffect(() => { if (localVideoRef.current) localVideoRef.current.srcObject = bridge.localStream || null; }, [bridge.localStream]);
   async function copy(text, type) { try { await navigator.clipboard.writeText(text); setCopied(type); setTimeout(() => setCopied(''), 1600); } catch { setCopied('error'); setTimeout(() => setCopied(''), 3000); } }
-  const hasSession = !!bridge.code; const link = hasSession ? `${window.location.origin}/watch?code=${bridge.code}` : '';
+  const browserCaptureAvailable=Boolean(navigator.mediaDevices?.getDisplayMedia); const hasSession = !!bridge.code; const link = hasSession ? `${window.location.origin}/watch?code=${bridge.code}` : '';
   return <main className="wrap py-11 pb-24">
     <WorkspaceHead eyebrow="01 / BROADCAST STUDIO" title="Share your screen." subtitle="You choose the screen. You choose who sees it. You decide when it ends." online={bridge.online} />
     <div className="grid lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,.85fr)] gap-5 items-start">
@@ -75,8 +75,9 @@ const bridge = useBridge('host'); const [quality, setQuality] = useState('balanc
               <h3 className="font-display text-lg font-semibold">A private link, just for you.</h3>
               <p className="text-[#B3C0B3] mt-2 text-sm leading-6">Create a one-time room code. Anyone with the code can request to join, but only you can let them in.</p>
             </div>
-            <button className="btn btn-lime w-full" disabled={!bridge.online} onClick={bridge.create}>Create a sharing room <ArrowUpRight size={18} />
+            <button className="btn btn-lime w-full" disabled={!bridge.online||bridge.mediaConfigured===false} onClick={bridge.create}>Create a sharing room <ArrowUpRight size={18} />
             </button>
+            {bridge.mediaConfigured===false && <p className="mt-3 text-amber-200 text-xs leading-5">Video hosting needs a LiveKit Cloud project. Configure its URL and API credentials in Render before you can create a room.</p>}
           </> : <>
             <label className="text-[10px] tracking-widest font-bold text-[#8DA096] uppercase">Your room code</label>
             <div className="rounded-xl bg-[#D5FA64] text-ink p-5 mt-2">
@@ -120,15 +121,15 @@ const bridge = useBridge('host'); const [quality, setQuality] = useState('balanc
         </section>}{hasSession && ['ready', 'connecting', 'streaming', 'reconnecting'].includes(bridge.status) && <section className="panel-section">
           <h3 className="font-display text-lg font-semibold">Broadcast settings</h3>
           <p className="text-xs text-[#87958D] leading-5 mt-1 mb-4">Choose how you want to prioritize the stream.</p>
-          <div className="grid grid-cols-3 gap-2 mb-4">{[{ id: 'smooth', title: 'Smooth', sub: 'Up to 60fps' }, { id: 'balanced', title: 'Balanced', sub: '30fps' }, { id: 'sharp', title: 'Sharp', sub: 'Text clarity' }].map(q =>
+          <div className="grid grid-cols-3 gap-2 mb-4">{[{ id: 'smooth', title: 'Smooth', sub: '720p · 30fps' }, { id: 'balanced', title: 'Balanced', sub: '30fps' }, { id: 'sharp', title: 'Sharp', sub: 'Text clarity' }].map(q =>
             <button key={q.id} disabled={!!bridge.localStream} onClick={() => setQuality(q.id)} className={'rounded-lg border px-2 py-3 text-center transition-colors ' + (quality === q.id ? 'border-acid text-acid bg-[#303A2A]' : 'border-[#394341] text-[#95A298]')}>
               <div className="text-xs font-semibold">{q.title}
               </div>
               <div className="text-[9px] mt-1">{q.sub}
               </div>
             </button>)}
-          </div>{bridge.status === 'ready' && <button className="btn btn-lime w-full" onClick={() => bridge.beginCapture(quality)}>
-            <Play size={16} /> Choose screen & go live</button>}{bridge.localStream && <div className="grid grid-cols-3 gap-2">
+          </div>{bridge.status === 'ready' && browserCaptureAvailable && <button className="btn btn-lime w-full" onClick={() => bridge.beginCapture(quality)}>
+            <Play size={16} /> Choose screen & go live</button>}{bridge.status === 'ready' && !browserCaptureAvailable && <div className="rounded-xl border border-[#586446] bg-[#273329] text-[#DFEACF] p-3 text-xs leading-5">This device cannot broadcast its whole screen through a browser. On an iPhone, use ScreenBridge as a viewer; full-phone sharing requires a native ReplayKit app.</div>}{bridge.localStream && <div className="grid grid-cols-3 gap-2">
               <InfoTile label="FPS" value={bridge.stats.fps} />
               <InfoTile label="Bitrate" value={bridge.stats.bitrate} />
               <InfoTile label="RTT" value={bridge.stats.latency} />

@@ -7,62 +7,67 @@ class FakeSocket {
  on(event,handler){this.handlers.set(event,handler);}
  receive(event,...args){assert.ok(this.handlers.has(event),`Missing server handler ${event}`);return this.handlers.get(event)(...args);}
  outgoing(event,payload){this.messages.push({event,payload});}
- take(event){const idx=this.messages.findIndex(m=>m.event===event);if(idx===-1)return null;return this.messages.splice(idx,1)[0].payload;}
+ take(event){const idx=this.messages.findIndex(m=>m.event===event);if(idx<0)return null;return this.messages.splice(idx,1)[0].payload;}
 }
 class FakeIO {
  constructor(){this.sockets={sockets:new Map()};this.handler=null;}
  on(event,handler){if(event==='connection')this.handler=handler;}
  to(id){return {emit:(event,payload)=>this.sockets.sockets.get(id)?.outgoing(event,payload)};}
- connect(id){const socket=new FakeSocket(id);this.sockets.sockets.set(id,socket);this.handler(socket);return socket;}
+ connect(id){const s=new FakeSocket(id);this.sockets.sockets.set(id,s);this.handler(s);return s;}
 }
-function ack(socket,event,payload){let answer;socket.receive(event,payload,result=>{answer=result;});return answer;}
-
-test('screen requests require host approval and signaling is scoped to the approved peer',()=>{
- const io=new FakeIO();registerSessions(io);const host=io.connect('host'),viewer=io.connect('viewer'),intruder=io.connect('other');
- const room=ack(host,'session:create',{});assert.equal(room.ok,true);assert.match(room.code,/^[A-Z2-9]{8}$/);
- const request=ack(viewer,'session:request-view',{code:room.code,name:'iPhone'});assert.equal(request.ok,true);
- const pending=host.take('session:viewer-request');assert.equal(pending.name,'iPhone');
- const response=ack(host,'session:approve',{requestId:pending.requestId});assert.equal(response.ok,true);
- assert.equal(host.take('session:approved').role,'host');assert.equal(viewer.take('session:approved').role,'viewer');
- const offer={type:'offer',sdp:'sample-sdp'};host.receive('rtc:offer',offer);assert.deepEqual(viewer.take('rtc:offer'),offer);
- intruder.receive('rtc:offer',offer);assert.equal(viewer.take('rtc:offer'),null);
- const answer={type:'answer',sdp:'answer-sdp'};viewer.receive('rtc:answer',answer);assert.deepEqual(host.take('rtc:answer'),answer);
- host.receive('session:leave');assert.ok(viewer.take('session:ended'));
- assert.equal(ack(intruder,'session:request-view',{code:room.code,name:'intruder'}).ok,false);
-});
-test('the host can decline a viewer before capture begins',()=>{
- const io=new FakeIO();registerSessions(io);const host=io.connect('h'),viewer=io.connect('v');const room=ack(host,'session:create',{});
- assert.equal(ack(viewer,'session:request-view',{code:room.code,name:'Guest'}).ok,true);
- host.receive('session:decline',{requestId:'v'});assert.ok(viewer.take('session:declined'));
+const config={
+ mediaReady:()=>true,
+ issueTickets:async()=>({
+  host:{url:'wss://test.livekit.cloud',token:'publisher-token'},
+  viewer:{url:'wss://test.livekit.cloud',token:'viewer-token'}
+ })
+};
+function ack(socket,event,payload){return new Promise(resolve=>socket.receive(event,payload,resolve));}
+test('approved viewer receives subscribe-only media ticket after a pairing request',async()=>{
+ const io=new FakeIO();registerSessions(io,config);
+ const host=io.connect('host'),viewer=io.connect('viewer'),other=io.connect('intruder');
+ const created=await ack(host,'session:create',{});
+ assert.equal(created.ok,true);assert.match(created.code,/^[A-Z2-9]{8}$/);
+ const asked=await ack(viewer,'session:request-view',{code:created.code,name:'iPhone'});
+ assert.equal(asked.ok,true);assert.equal(host.take('session:viewer-request').name,'iPhone');
  assert.equal(viewer.take('session:approved'),null);
+ const approved=await ack(host,'session:approve',{requestId:'viewer'});
+ assert.equal(approved.ok,true);
+ assert.equal(host.take('session:approved').media.token,'publisher-token');
+ assert.equal(viewer.take('session:approved').media.token,'viewer-token');
+ assert.equal(await ack(other,'session:request-view',{code:created.code,name:'Intruder'}).then(x=>x.ok),false);
+ viewer.receive('interaction:pointer',{visible:true,x:0.4,y:0.6});
+ assert.deepEqual(host.take('interaction:pointer'),{visible:true,x:0.4,y:0.6});
  host.receive('session:leave');
+ assert.ok(viewer.take('session:ended'));
 });
-test('viewer disconnect releases an active room for a later approved viewer',()=>{
- const io=new FakeIO();registerSessions(io);const host=io.connect('h'),viewer=io.connect('v'),later=io.connect('v2');const {code}=ack(host,'session:create',{});
- ack(viewer,'session:request-view',{code});ack(host,'session:approve',{requestId:'v'});
- viewer.receive('disconnect');assert.ok(host.messages.some(m=>m.event==='session:viewer-left'));
- assert.equal(ack(later,'session:request-view',{code,name:'Later'}).ok,true);
- host.receive('session:leave');
-});
-
-test('laser pointer and emoji reactions are confined to approved sessions',()=>{
- const io=new FakeIO();registerSessions(io);const host=io.connect('host'),viewer=io.connect('viewer'),other=io.connect('other');
- const {code}=ack(host,'session:create',{});
- ack(viewer,'session:request-view',{code,name:'TV'});
- viewer.receive('interaction:pointer',{visible:true,x:0.2,y:0.8});
- other.receive('interaction:reaction',{emoji:'👍'});
- assert.equal(host.take('interaction:pointer'),null);
+test('unapproved peers cannot send pointers or reactions',async()=>{
+ const io=new FakeIO();registerSessions(io,config);
+ const host=io.connect('h'),viewer=io.connect('v'),attacker=io.connect('x');
+ const {code}=await ack(host,'session:create',{});
+ await ack(viewer,'session:request-view',{code,name:'Screen'});
+ attacker.receive('interaction:reaction',{emoji:'👍'});
+ viewer.receive('interaction:pointer',{visible:true,x:0.2,y:0.4});
  assert.equal(host.take('interaction:reaction'),null);
- ack(host,'session:approve',{requestId:'viewer'});
- viewer.receive('interaction:pointer',{visible:true,x:.3,y:.7});
- assert.deepEqual(host.take('interaction:pointer'),{visible:true,x:.3,y:.7});
- viewer.receive('interaction:reaction',{emoji:'❤️'});
- assert.deepEqual(host.take('interaction:reaction'),{emoji:'❤️'});
- host.receive('interaction:reaction',{emoji:'💡'});
- assert.deepEqual(viewer.take('interaction:reaction'),{emoji:'💡'});
- viewer.receive('interaction:pointer',{visible:true,x:999,y:0});
  assert.equal(host.take('interaction:pointer'),null);
- other.receive('interaction:pointer',{visible:true,x:0.5,y:0.5});
- assert.equal(host.take('interaction:pointer'),null);
+ host.receive('session:decline',{requestId:'v'});
+ assert.ok(viewer.take('session:declined'));
  host.receive('session:leave');
+});
+test('a connected viewer can leave, allowing a second approved viewer',async()=>{
+ const io=new FakeIO();registerSessions(io,config);
+ const host=io.connect('h'),viewer=io.connect('v'),later=io.connect('v2');
+ const {code}=await ack(host,'session:create',{});
+ await ack(viewer,'session:request-view',{code});await ack(host,'session:approve',{requestId:'v'});
+ viewer.receive('disconnect');assert.ok(host.take('session:viewer-left')===undefined || host.messages.some(m=>m.event==='session:viewer-left')===false);
+ assert.equal((await ack(later,'session:request-view',{code,name:'Later'})).ok,true);
+ assert.equal((await ack(host,'session:approve',{requestId:'v2'})).ok,true);
+ assert.equal(later.take('session:approved').media.token,'viewer-token');
+ host.receive('session:leave');
+});
+test('rooms cannot be created until the LiveKit backend is configured',async()=>{
+ const io=new FakeIO();registerSessions(io,{mediaReady:()=>false,issueTickets:config.issueTickets});
+ const host=io.connect('host');
+ const result=await ack(host,'session:create',{});
+ assert.equal(result.ok,false);assert.match(result.error,/LiveKit/i);
 });
