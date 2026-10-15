@@ -20,6 +20,7 @@ export default function Watch() {
   const [full, setFull] = useState(false);
   const [needsPlay, setNeedsPlay] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [waitSeconds, setWaitSeconds] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [laser, setLaser] = useState(false);
   const [pointer, setPointer] = useState(null);
@@ -38,13 +39,43 @@ export default function Watch() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    video.srcObject = bridge.remoteStream || null;
+    let disposed = false, frameId;
+    const stream = bridge.remoteStream;
+    video.srcObject = stream || null;
+    video.muted = true;
     setVideoReady(false);
     setAudioEnabled(false);
-    video.muted = true; // iPhone Safari permits muted inline autoplay; sound requires a tap.
-    if (bridge.remoteStream) video.play().then(() => setNeedsPlay(false)).catch(() => setNeedsPlay(true));
-    else { setIsPortrait(false); setNeedsPlay(false); }
+    const markReady = () => {
+      if (!disposed && video.srcObject === stream) {
+        setVideoReady(true);
+        setNeedsPlay(false);
+        bridge.confirmVideo();
+      }
+    };
+    const fallback = () => {
+      if (!video.requestVideoFrameCallback && video.videoWidth > 0 && video.readyState >= 2) markReady();
+    };
+    if (stream) {
+      if (video.requestVideoFrameCallback) frameId = video.requestVideoFrameCallback(markReady);
+      video.addEventListener('loadeddata', fallback);
+      video.addEventListener('timeupdate', fallback);
+      video.play().then(() => setNeedsPlay(false)).catch(() => setNeedsPlay(true));
+    } else { setIsPortrait(false); setNeedsPlay(false); }
+    return () => {
+      disposed = true;
+      if (frameId != null) video.cancelVideoFrameCallback?.(frameId);
+      video.removeEventListener('loadeddata', fallback);
+      video.removeEventListener('timeupdate', fallback);
+    };
   }, [bridge.remoteStream]);
+  useEffect(() => {
+    if (videoReady || !['pending','waiting-screen','connecting','reconnecting'].includes(bridge.status)) {
+      setWaitSeconds(0);
+      return;
+    }
+    const timer = setInterval(() => setWaitSeconds(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, [bridge.status, videoReady]);
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
