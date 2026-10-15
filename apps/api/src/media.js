@@ -24,7 +24,8 @@ export async function createMediaTickets(sessionId) {
     jwt.addGrant({
       roomJoin: true, room: roomName,
       canPublish: role === 'host',
-      canPublishSources: role === 'host' ? ['screen_share', 'screen_share_audio'] : [],
+      // LiveKit server-sdk expects protobuf TrackSource enum values (3 and 4), not browser track-source strings.
+      canPublishSources: role === 'host' ? [3, 4] : [],
       canSubscribe: role === 'viewer',
       canPublishData: false
     });
