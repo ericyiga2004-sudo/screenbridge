@@ -18,7 +18,7 @@ export async function fetchIceConfig() {
   if (!response.ok) throw new Error('Could not load network configuration. Check your ScreenBridge API.');
   const data = await response.json();
   if (!Array.isArray(data.iceServers)) throw new Error('Invalid network configuration from the API.');
-  return { iceServers: data.iceServers };
+  return { iceServers: data.iceServers, turnConfigured: data.turnConfigured === true };
 }
 
 export function emitAck(socket, event, payload) {

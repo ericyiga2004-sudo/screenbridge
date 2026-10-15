@@ -21,8 +21,18 @@ export function useBridge(role){
  const ensurePeer=useCallback(async()=>{
   if(peerRef.current)return peerRef.current;
   const iceConfig=await fetchIceConfig();setTurnConfigured(Boolean(iceConfig.turnConfigured));
-  const peer=new RTCPeerConnection(iceConfig);peerRef.current=peer;
+  const peer=new RTCPeerConnection({iceServers:iceConfig.iceServers});peerRef.current=peer;
   peer.onicecandidate=event=>{if(event.candidate)socket.emit('rtc:ice',event.candidate.toJSON());};
+  peer.oniceconnectionstatechange=()=>{
+   // ICE failure is distinct from room pairing; help identify a missing relay.
+   if(peer.iceConnectionState==='failed'){
+    setPeerState('failed');
+    setStatus('failed');
+    setError(iceConfig.turnConfigured
+      ? 'ICE connection failed even with TURN configured. Verify relay credentials, allowed ports, and the provider status.'
+      : 'No direct media path was found. Configure a TURN relay in Render, then reset the session and try again.');
+   }
+  };
   peer.ontrack=event=>{const s=event.streams?.[0] || new MediaStream([event.track]);setRemoteStream(s);};
   peer.onconnectionstatechange=()=>{setPeerState(peer.connectionState);if(peer.connectionState==='connected'){setStatus(role==='host'?'streaming':'connecting');setError('');}else if(peer.connectionState==='disconnected'){setStatus('reconnecting');}else if(peer.connectionState==='failed'){setStatus('failed');setError(iceConfig.turnConfigured?'Video connection failed even with TURN configured. Check network access and TURN credentials.':'The devices could not establish a media path. A TURN relay is usually needed across mobile data or restrictive Wi-Fi. Reset the connection after configuring TURN.');}};
   statsTimerRef.current=setInterval(async()=>{

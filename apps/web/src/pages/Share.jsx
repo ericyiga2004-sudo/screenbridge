@@ -134,8 +134,7 @@ const bridge = useBridge('host'); const [quality, setQuality] = useState('balanc
               <InfoTile label="RTT" value={bridge.stats.latency} />
             </div>}
           <p className="text-[11px] text-[#91A097] mt-3 leading-5">Your browser will prompt you to pick a display, window or tab. That permission is always required.</p>
-        </section>}{bridge.error && <div className="toast-error" role="alert">{bridge.error}
-        </div>}
+        </section>}{bridge.error && <div className="toast-error" role="alert">{bridge.error}{bridge.status==='failed' && <p className="mt-2 text-xs">TURN relay: {bridge.turnConfigured?'configured (check provider if connection still fails)':'not configured on Render'}</p>}</div>}
         <section className="p-1">
           <TrustNote />
         </section>
