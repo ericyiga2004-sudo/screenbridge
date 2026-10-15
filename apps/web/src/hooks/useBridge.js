@@ -10,6 +10,7 @@ export function useBridge(role){
  const [online,setOnline]=useState(false),[mediaConfigured,setMediaConfigured]=useState(null);
  const [code,setCode]=useState(''),[status,setStatus]=useState('idle'),[error,setError]=useState('');
  const [requests,setRequests]=useState([]),[localStream,setLocalStream]=useState(null),[remoteStream,setRemoteStream]=useState(null);
+ const [remoteVideoTrack,setRemoteVideoTrack]=useState(null),[remoteAudioTrack,setRemoteAudioTrack]=useState(null);
  const [remotePointer,setRemotePointer]=useState(null),[reaction,setReaction]=useState(null);
  const [stats,setStats]=useState({fps:'—',bitrate:'—',latency:'—',quality:'Waiting'});
  const [peerState,setPeerState]=useState('new');
@@ -18,7 +19,7 @@ export function useBridge(role){
   const room=roomRef.current;roomRef.current=null;
   if(room){room.removeAllListeners();void room.disconnect();}
   localTrackRef.current=null;received.current={video:null,audio:null};
-  setLocalStream(null);setRemoteStream(null);setPeerState('new');
+  setLocalStream(null);setRemoteStream(null);setRemoteVideoTrack(null);setRemoteAudioTrack(null);setPeerState('new');
   setRemotePointer(null);setReaction(null);
   setStats({fps:'—',bitrate:'—',latency:'—',quality:'Waiting'});
  },[]);
@@ -30,7 +31,9 @@ export function useBridge(role){
  const connectLive=useCallback(async(media)=>{
   if(!media?.token||!/^wss:\/\//.test(media.url||''))throw Error('LiveKit media credentials were not issued by the server.');
   resetMedia();
-  const room=new Room({adaptiveStream:true,dynacast:true});
+  // Manual video stages can start outside the viewport on small phones. Do not pause SFU
+  // forwarding based on element visibility for this one-viewer experience.
+  const room=new Room({adaptiveStream:false,dynacast:true});
   roomRef.current=room;
   function updateStream(){
    const tracks=[received.current.video?.mediaStreamTrack,received.current.audio?.mediaStreamTrack]
@@ -39,14 +42,14 @@ export function useBridge(role){
   }
   room.on(RoomEvent.TrackSubscribed,(track)=>{
    if(track.source===Track.Source.ScreenShare&&track.kind===Track.Kind.Video){
-    received.current.video=track;updateStream();setStatus('connecting');
+    received.current.video=track;setRemoteVideoTrack(track);updateStream();setStatus('connecting');
    } else if(track.source===Track.Source.ScreenShareAudio){
-    received.current.audio=track;updateStream();
+    received.current.audio=track;setRemoteAudioTrack(track);updateStream();
    }
   });
   room.on(RoomEvent.TrackUnsubscribed,(track)=>{
-   if(received.current.video===track)received.current.video=null;
-   if(received.current.audio===track)received.current.audio=null;
+   if(received.current.video===track){received.current.video=null;setRemoteVideoTrack(null);}
+   if(received.current.audio===track){received.current.audio=null;setRemoteAudioTrack(null);}
    updateStream();if(role==='viewer'&&!received.current.video)setStatus('waiting-screen');
   });
   room.on(RoomEvent.LocalTrackUnpublished,pub=>{
@@ -156,5 +159,5 @@ export function useBridge(role){
  const point=useCallback((x,y,visible=true)=>{if(socket.connected&&role==='viewer')socket.emit('interaction:pointer',{x,y,visible});},[socket,role]);
  const reactTo=useCallback(emoji=>{if(socket.connected&&['👍','👏','❤️','💡','✨'].includes(emoji))socket.emit('interaction:reaction',{emoji});},[socket]);
  return {online,mediaConfigured,code,status,error,requests,stats,peerState,localStream,remoteStream,
- remotePointer,reaction,create,request,approve,decline,beginCapture,stop,confirmVideo,point,reactTo,setError};
+ remotePointer,reaction,remoteVideoTrack,remoteAudioTrack,create,request,approve,decline,beginCapture,stop,confirmVideo,point,reactTo,setError};
 }
