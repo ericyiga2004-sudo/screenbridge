@@ -128,7 +128,7 @@ const bridge = useBridge('host'); const [quality, setQuality] = useState('balanc
               <div className="text-[9px] mt-1">{q.sub}
               </div>
             </button>)}
-          </div>{bridge.status === 'ready' && browserCaptureAvailable && <button className="btn btn-lime w-full" onClick={() => bridge.beginCapture(quality)}>
+          </div>{bridge.status === 'ready' && !bridge.localStream && <p role="status" className="mb-3 rounded-lg border border-[#506343] bg-[#28372B] p-3 text-xs leading-5 text-[#DBEDC4]">Viewer approved. The viewer will see a blank screen until you click Choose screen & go live and select a screen in Chrome.</p>}{bridge.status === 'ready' && browserCaptureAvailable && <button className="btn btn-lime w-full" onClick={() => bridge.beginCapture(quality)}>
             <Play size={16} /> Choose screen & go live</button>}{bridge.status === 'ready' && !browserCaptureAvailable && <div className="rounded-xl border border-[#586446] bg-[#273329] text-[#DFEACF] p-3 text-xs leading-5">This device cannot broadcast its whole screen through a browser. On an iPhone, use ScreenBridge as a viewer; full-phone sharing requires a native ReplayKit app.</div>}{bridge.localStream && <div className="grid grid-cols-3 gap-2">
               <InfoTile label="FPS" value={bridge.stats.fps} />
               <InfoTile label="Bitrate" value={bridge.stats.bitrate} />
