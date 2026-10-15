@@ -12,6 +12,8 @@ const app=express();
 const origin=process.env.WEB_ORIGIN || 'http://localhost:5173';
 const allowed=process.env.NODE_ENV!=='production' ? true : origin.split(',').map(x=>x.trim());
 app.disable('x-powered-by');
+// Render supplies the client IP through its reverse proxy.
+app.set('trust proxy', 1);
 app.use(helmet({contentSecurityPolicy:false,crossOriginEmbedderPolicy:false}));
 app.use(cors({origin:allowed}));
 app.use(express.json({limit:'16kb'}));
