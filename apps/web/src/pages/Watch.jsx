@@ -28,6 +28,8 @@ export default function Watch() {
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const stageRef = useRef(null);
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
+  const [playbackInfo, setPlaybackInfo] = useState({ready:0, paused:true, size:'—', frames:'—'});
   const lastPointerAt = useRef(0);
   const live = bridge.status === 'streaming' && videoReady;
   const connected = !!bridge.remoteStream;
@@ -36,64 +38,89 @@ export default function Watch() {
   const canPoint = canInteract && laser && !rotated && fit === 'contain';
   const valid = code.length === 8;
 
+  // Video must remain attached when audio subscribes: reattaching it can stall older iOS Safari.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const videoTrack = bridge.remoteVideoTrack;
-    const audioTrack = bridge.remoteAudioTrack;
-    const stream = bridge.remoteStream;
+    const track = bridge.remoteVideoTrack;
     let disposed = false;
     let frameId;
     setVideoReady(false);
-    setAudioEnabled(false);
+    setNeedsPlay(false);
     video.muted = true;
     video.srcObject = null;
-
-    // LiveKit manages its subscribed video track through attach()/detach().
-    // Assigning a bare mediaStreamTrack while adaptive streaming is active can
-    // leave the video paused at the SFU, particularly on mobile Safari.
-    try {
-      if (videoTrack) {
-        videoTrack.attach(video);
-        if (audioTrack) audioTrack.attach(video);
-      } else if (stream) {
-        video.srcObject = stream;
-      }
-    } catch (e) {
-      bridge.setError('Unable to attach the received LiveKit screen: ' + (e.message || String(e)));
-    }
-
-    const firstFrame = () => {
-      if (disposed || !videoTrack || video.videoWidth <= 0 || video.readyState < 2) return;
-      setVideoReady(true);
-      setNeedsPlay(false);
-      bridge.confirmVideo();
-    };
-    const fallback = () => {
-      if (!video.requestVideoFrameCallback && video.videoWidth > 0 && video.readyState >= 2) {
+    const markReady = () => {
+      if (!disposed && video.videoWidth > 0 && video.readyState >= 2) {
         setVideoReady(true);
+        setNeedsPlay(false);
         bridge.confirmVideo();
       }
     };
-    if (videoTrack || stream) {
-      if (video.requestVideoFrameCallback) frameId = video.requestVideoFrameCallback(firstFrame);
-      video.addEventListener('loadeddata', fallback);
-      video.addEventListener('timeupdate', fallback);
-      video.play().then(() => setNeedsPlay(false)).catch(() => setNeedsPlay(true));
+    const fallback = () => {
+      if (!video.requestVideoFrameCallback) markReady();
+    };
+    if (track) {
+      try {
+        track.attach(video);
+        if (video.requestVideoFrameCallback) frameId = video.requestVideoFrameCallback(markReady);
+        video.addEventListener('loadeddata', fallback);
+        video.addEventListener('timeupdate', fallback);
+        video.play().then(() => setNeedsPlay(false)).catch(() => setNeedsPlay(true));
+      } catch (err) {
+        bridge.setError('Safari cannot attach the incoming video: ' + (err.message || String(err)));
+      }
     } else {
       setIsPortrait(false);
-      setNeedsPlay(false);
     }
     return () => {
       disposed = true;
-      if (frameId != null) video.cancelVideoFrameCallback?.(frameId);
+      if (frameId !== undefined) video.cancelVideoFrameCallback?.(frameId);
       video.removeEventListener('loadeddata', fallback);
       video.removeEventListener('timeupdate', fallback);
-      try { audioTrack?.detach(video); } catch {}
-      try { videoTrack?.detach(video); } catch {}
+      try { track?.detach(video); } catch {}
       video.srcObject = null;
     };
-  }, [bridge.remoteVideoTrack, bridge.remoteAudioTrack, bridge.remoteStream]);
+  }, [bridge.remoteVideoTrack]);
+
+  // A separate audio element prevents later audio subscriptions from interrupting video.
+  useEffect(() => {
+    const audio = audioRef.current;
+    const track = bridge.remoteAudioTrack;
+    if (!audio) return;
+    audio.muted = true;
+    if (track) {
+      try { track.attach(audio); } catch {}
+    }
+    return () => {
+      try { track?.detach(audio); } catch {}
+      audio.srcObject = null;
+    };
+  }, [bridge.remoteAudioTrack]);
+
+  useEffect(() => {
+    setAudioEnabled(false);
+  }, [bridge.remoteAudioTrack]);
+
+  // A tiny diagnostic snapshot lets older iPhones report their real playback state.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !bridge.remoteVideoTrack) {
+      setPlaybackInfo({ready:0, paused:true, size:'—', frames:'—'});
+      return;
+    }
+    const update = () => {
+      const quality = video.getVideoPlaybackQuality?.();
+      setPlaybackInfo({
+        ready:video.readyState,
+        paused:video.paused,
+        size:video.videoWidth && video.videoHeight ? video.videoWidth+' × '+video.videoHeight : '—',
+        frames:typeof quality?.totalVideoFrames === 'number' ? String(quality.totalVideoFrames) : 'Unavailable'
+      });
+    };
+    update();
+    const interval = setInterval(update,2000);
+    return () => clearInterval(interval);
+  }, [bridge.remoteVideoTrack]);
   useEffect(() => {
     if (videoReady || !['pending','waiting-screen','connecting','reconnecting'].includes(bridge.status)) {
       setWaitSeconds(0);
@@ -153,11 +180,11 @@ export default function Watch() {
   }
   function reactTo(emoji) { if (!canInteract) return; bridge.reactTo(emoji); setLastReaction(emoji); }
   async function enableAudio() {
-    const video = videoRef.current;
-    if (!video) return;
-    video.muted = false;
-    try { await video.play(); setAudioEnabled(true); }
-    catch { video.muted = true; bridge.setError('Your browser blocked sound. Tap Enable sound again.'); }
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.muted = false;
+    try { await audio.play(); setAudioEnabled(true); }
+    catch { audio.muted = true; bridge.setError('Your browser blocked sound. Tap Enable sound again.'); }
   }
   function rotateScreen() { if (laser) { setLaser(false); clearPointer(); } setRotated(v=>!v); }
 
@@ -185,7 +212,7 @@ export default function Watch() {
             </div>}
             <video
               ref={videoRef}
-              autoPlay playsInline muted={!audioEnabled} controls={false}
+              autoPlay playsInline muted controls={false}
               onPlaying={event=>{if(event.currentTarget.videoWidth>0 && event.currentTarget.readyState>=2){setVideoReady(true);bridge.confirmVideo();}}}
               onWaiting={()=>setVideoReady(false)}
               onError={()=>{setVideoReady(false);bridge.setError('Video playback failed in this browser. Try restarting the session.');}}
@@ -193,13 +220,14 @@ export default function Watch() {
               style={rotated ? {objectFit:fit,width:`${stageSize.height}px`,height:`${stageSize.width}px`,left:'50%',top:'50%',inset:'auto',transform:'translate(-50%,-50%) rotate(90deg)'} : {objectFit:fit}}
               onLoadedMetadata={event=>setIsPortrait(event.currentTarget.videoHeight>event.currentTarget.videoWidth)}
             />
+            <audio ref={audioRef} autoPlay playsInline muted={!audioEnabled} className="hidden" />
             {!connected && <div className="text-center px-6 max-w-sm z-10">
               <div className="inline-flex w-20 h-20 bg-[#26302F] text-acid border border-[#43534A] rounded-2xl items-center justify-center mb-6"><MonitorPlay size={36} strokeWidth={1.5}/></div>
               <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-[-.05em]">{bridge.status === 'waiting-screen' ? 'Waiting for the sharer.' : bridge.status === 'connecting' ? 'Connecting to video.' : 'Your window to anywhere.'}</h2>
               <p className="text-[#92A097] text-sm leading-6 mt-3">{bridge.status === 'waiting-screen' ? 'Approved. On the laptop, click Choose screen & go live and pick a screen in Chrome.' : bridge.status === 'connecting' ? 'Connecting to the secure LiveKit video server.' : 'Enter a code, wait for approval, and watch the other screen arrive here.'}</p>
               {waitSeconds >= 25 && ['waiting-screen','connecting','reconnecting'].includes(bridge.status) && <p role="status" className="mt-4 rounded-lg border border-[#796B41] bg-[#302B20] p-3 text-xs text-[#F3DEA6] leading-5">Still waiting after {waitSeconds} seconds. Check the laptop: is the screen preview moving? If not, click Choose screen & go live. If it is moving, leave and start a fresh session.</p>}
             </div>}
-            {needsPlay && connected && <button className="absolute z-30 bg-acid text-ink rounded-lg px-5 py-3 font-semibold" onClick={play}>Tap to play video</button>}
+            {connected && !videoReady && (needsPlay || waitSeconds >= 8) && <button className="absolute z-30 bg-acid text-ink rounded-lg px-5 py-3 font-semibold" onClick={play}>Tap to start video</button>}
             {live && <div className="absolute top-3 right-3 z-20 bg-[#121919]/90 border border-[#48534B] px-2 py-1 text-[10px] font-semibold rounded flex items-center gap-1.5 text-acid"><span className="w-1.5 h-1.5 bg-acid rounded-full"/>LIVE</div>}
             {connected && !live && !needsPlay && <div className="absolute inset-x-3 bottom-10 text-center z-20 text-xs text-[#D9E5DC] bg-[#101718]/90 border border-[#36443D] rounded-lg p-3">{waitSeconds >= 25 ? 'A video track arrived, but no playable frames have appeared. Check that the laptop is broadcasting; otherwise restart the session.' : bridge.status==='failed'?'LiveKit media connection failed. Try starting a fresh approved session.':'Video track received. Waiting for the first playable frames…'}</div>}
             {canPoint && pointer && <PointerSpot pointer={pointer} stageRef={stageRef} videoRef={videoRef}/>}
@@ -216,7 +244,8 @@ export default function Watch() {
             </div>
             {!['idle','ended'].includes(bridge.status) && <button onClick={bridge.stop} className="btn btn-line !px-3 !py-2 !text-xs"><X size={14}/> Leave</button>}
           </div>
-          {live && bridge.remoteStream?.getAudioTracks()?.length>0 && !audioEnabled && <button className="btn btn-quiet mt-3 !text-xs" onClick={enableAudio}>Enable sound</button>}
+          {live && bridge.remoteAudioTrack && !audioEnabled && <button className="btn btn-quiet mt-3 !text-xs" onClick={enableAudio}>Enable sound</button>}
+          {connected && !videoReady && waitSeconds >= 8 && <div role="status" className="mt-3 p-3 rounded-lg bg-[#222B29] border border-[#4B5A51] text-xs text-[#D4E0D8] leading-5">iPhone video diagnostic: {playbackInfo.size} · playback {playbackInfo.paused ? 'paused' : 'running'} · readyState {playbackInfo.ready} · frames {playbackInfo.frames}. Tap to start video above. If it remains blank, send me these values.</div>}
           <p className="text-[#809087] text-[11px] leading-5 mt-3 px-1">TV canvas centers portrait screens on wide displays. Rotate fixes sideways video; Fill crops edges. Point lets you guide the sharer without remote control.</p>
         </section>
         {canInteract && <section className="card-slate mt-4 p-4 flex flex-wrap items-center gap-2 sm:gap-4" aria-label="Send a reaction"><span className="text-[10px] uppercase tracking-[.18em] text-[#91A096] font-bold mr-1">Quick reactions</span>{EMOJI.map(emoji=><button key={emoji} type="button" onClick={()=>reactTo(emoji)} aria-label={`Send ${emoji} reaction`} className={'reaction-button '+(lastReaction===emoji?'reaction-sent':'')}>{emoji}</button>)}<span className="text-[#73867A] text-[10px] sm:ml-auto">Only your approved partner sees these</span></section>}
