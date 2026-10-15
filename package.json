@@ -1,0 +1,21 @@
+{
+  "name": "screenbridge",
+  "version": "1.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n API,WEB -c cyan,green \"npm run dev -w @screenbridge/api\" \"npm run dev -w @screenbridge/web\"",
+    "build": "npm run build -w @screenbridge/web",
+    "start": "npm run start -w @screenbridge/api",
+    "check": "npm run check -w @screenbridge/api && npm run build -w @screenbridge/web",
+    "test": "node --test apps/api/test/*.test.js apps/web/test/*.test.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

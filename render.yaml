@@ -1,0 +1,14 @@
+# Test service. Free instances can sleep; upgrade to always-on for live sessions.
+services:
+  - type: web
+    name: screenbridge-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start -w @screenbridge/api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WEB_ORIGIN
+        sync: false
