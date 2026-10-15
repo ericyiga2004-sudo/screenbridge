@@ -5,7 +5,7 @@ export function useBridge(role){
  const socketRef=useRef(null);
  if(!socketRef.current)socketRef.current=createSocket();
  const peerRef=useRef(null);const streamRef=useRef(null);const candidatesRef=useRef([]);const statsTimerRef=useRef(null);const lastBytesRef=useRef(null);const handStoppedRef=useRef(false);
- const [online,setOnline]=useState(false);
+ const [online,setOnline]=useState(false);const [turnConfigured,setTurnConfigured]=useState(false);
  const [code,setCode]=useState('');const [status,setStatus]=useState('idle');const [error,setError]=useState('');
  const [requests,setRequests]=useState([]);const [localStream,setLocalStream]=useState(null);const [remoteStream,setRemoteStream]=useState(null);
  const [remotePointer,setRemotePointer]=useState(null);const [reaction,setReaction]=useState(null);
@@ -20,17 +20,20 @@ export function useBridge(role){
  const stop=useCallback(()=>{handStoppedRef.current=true;socket.emit('session:leave');resetMedia();setCode('');setRequests([]);setStatus('ended');},[resetMedia,socket]);
  const ensurePeer=useCallback(async()=>{
   if(peerRef.current)return peerRef.current;
-  const peer=new RTCPeerConnection(await fetchIceConfig());peerRef.current=peer;
+  const iceConfig=await fetchIceConfig();setTurnConfigured(Boolean(iceConfig.turnConfigured));
+  const peer=new RTCPeerConnection(iceConfig);peerRef.current=peer;
   peer.onicecandidate=event=>{if(event.candidate)socket.emit('rtc:ice',event.candidate.toJSON());};
   peer.ontrack=event=>{const s=event.streams?.[0] || new MediaStream([event.track]);setRemoteStream(s);};
-  peer.onconnectionstatechange=()=>{setPeerState(peer.connectionState);if(peer.connectionState==='connected'){setStatus('streaming');setError('');}else if(peer.connectionState==='disconnected'){setStatus('reconnecting');}else if(peer.connectionState==='failed'){setStatus('failed');setError('Peer connection failed. Try again, or configure TURN for restricted networks.');}};
+  peer.onconnectionstatechange=()=>{setPeerState(peer.connectionState);if(peer.connectionState==='connected'){setStatus(role==='host'?'streaming':'connecting');setError('');}else if(peer.connectionState==='disconnected'){setStatus('reconnecting');}else if(peer.connectionState==='failed'){setStatus('failed');setError(iceConfig.turnConfigured?'Video connection failed even with TURN configured. Check network access and TURN credentials.':'The devices could not establish a media path. A TURN relay is usually needed across mobile data or restrictive Wi-Fi. Reset the connection after configuring TURN.');}};
   statsTimerRef.current=setInterval(async()=>{
    if(peer.connectionState==='closed')return;
    try {const reports=await peer.getStats();let candidate,media;
     reports.forEach(item=>{if(item.type===(role==='host'?'outbound-rtp':'inbound-rtp')&&item.kind==='video')media=item;if(item.type==='candidate-pair'&&item.state==='succeeded'&&item.nominated)candidate=item;});
     let bitrate='—';if(media?.bytesSent!=null||media?.bytesReceived!=null){const b=media.bytesSent??media.bytesReceived;const now=Date.now();if(lastBytesRef.current){const rate=Math.max(0,(b-lastBytesRef.current.bytes)*8/Math.max(1,now-lastBytesRef.current.at)*1000/1e6);bitrate=rate.toFixed(1)+' Mbps';}lastBytesRef.current={bytes:b,at:now};}
     const fps=media?.framesPerSecond?String(Math.round(media.framesPerSecond)):'—';const latency=candidate?.currentRoundTripTime!=null?Math.round(candidate.currentRoundTripTime*1000)+' ms':'—';
-    setStats({fps,bitrate,latency,quality:peer.connectionState==='connected'?'Live':'Connecting'});
+    const receivingVideo=role==='viewer' && peer.connectionState==='connected' && Number(media?.framesDecoded??media?.framesReceived??0)>0;
+    if(receivingVideo)setStatus('streaming');
+    setStats({fps,bitrate,latency,quality:receivingVideo || (role==='host' && peer.connectionState==='connected')?'Live':peer.connectionState==='failed'?'Failed':'Connecting'});
    }catch{/* Stats unavailable on some browsers */}
   },2000);
   return peer;
@@ -71,7 +74,8 @@ export function useBridge(role){
    socket.emit('rtc:offer',{type:offer.type,sdp:offer.sdp});setStatus('connecting');
   }catch(e){resetMedia();if(e.name==='NotAllowedError')setError('Screen selection was cancelled or screen recording permission was denied. Check browser and macOS permissions, then try again.');else setError('Screen sharing could not start: '+e.message);setStatus('ready');}
  },[ensurePeer,resetMedia,socket,stop]);
+ const confirmVideo=useCallback(()=>{if(role==='viewer'&&peerRef.current?.connectionState==='connected')setStatus('streaming');},[role]);
  const point=useCallback((x,y,visible=true)=>{if(socket.connected&&role==='viewer')socket.emit('interaction:pointer',{x,y,visible});},[role,socket]);
  const reactTo=useCallback(emoji=>{if(socket.connected&&['👍','👏','❤️','💡','✨'].includes(emoji))socket.emit('interaction:reaction',{emoji});},[socket]);
- return {online,code,status,error,requests,stats,peerState,localStream,remoteStream,remotePointer,reaction,point,reactTo,create,request,approve,decline,beginCapture,stop,setError};
+ return {online,turnConfigured,code,status,error,requests,stats,peerState,localStream,remoteStream,remotePointer,reaction,point,reactTo,confirmVideo,create,request,approve,decline,beginCapture,stop,setError};
 }

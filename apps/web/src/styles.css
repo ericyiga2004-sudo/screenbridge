@@ -68,3 +68,20 @@ button,input{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allow
 @keyframes float-notice {from {transform:translateY(-9px);opacity:0}to {transform:translateY(0);opacity:1}}
 @media (max-width:550px) { .tv-wing {opacity:.4}.tv-wing-hero {font-size:12px}.tv-wing-copy {display:none}.tv-wing-tick,.tv-wing-bottom {display:none}.tv-overlay-bottom {font-size:8px}.tv-stage {min-height:235px} }
 @media (prefers-reduced-motion:reduce) { .laser-pointer,.reaction-button {transition:none}.reaction-toast {animation:none} }
+
+/* v1.2: compact phones (including 375px iPhone 7) should never horizontally scroll. */
+html,body,#root{max-width:100%;width:100%;}
+body{min-width:0;overflow-x:clip;}
+.wrap{max-width:calc(100% - 32px);min-width:0;}
+.card-dark,.card-slate,.panel-section,.mobile-join,main,aside,form{min-width:0;}
+.input-dark{max-width:100%;min-width:0;}
+@media(max-width:1023px){.mobile-join > .panel-section:not(:first-child){display:none;} }
+@media(max-width:640px){
+ .wrap{width:calc(100% - 28px);max-width:calc(100% - 28px);}
+ .panel-section{padding:16px;}
+ .tv-stage{min-height:210px;}
+ .btn{white-space:normal;min-height:40px;gap:7px;padding:10px 12px;}
+ .code-display{letter-spacing:.075em;overflow-wrap:anywhere;}
+ .tv-wing{display:none;}
+ .tv-stage .tv-overlay-bottom{left:9px;bottom:9px;font-size:7px;}
+}

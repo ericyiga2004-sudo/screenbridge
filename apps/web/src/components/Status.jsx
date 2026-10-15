@@ -5,13 +5,13 @@ return <span className={'inline-flex items-center gap-2 text-[11px] font-bold ro
   </span>
 }
 export function WorkspaceHead({ eyebrow, title, subtitle, online }) {  
-return <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-5 mb-7">
+return <div className="flex min-w-0 flex-col sm:flex-row sm:justify-between sm:items-end gap-4 sm:gap-5 mb-6 sm:mb-7">
     <div>
       <Link to="/" className="text-xs text-[#98A29F] flex items-center gap-1 hover:text-white mb-5">
         <ArrowLeft size={14} /> Back to home</Link>
       <div className="eyebrow text-acid mb-3">{eyebrow}
       </div>
-      <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-[-.05em]">{title}
+      <h1 className="font-display text-[clamp(1.65rem,7vw,2.25rem)] font-semibold tracking-[-.05em]">{title}
       </h1>
       <p className="text-muted text-sm mt-2 max-w-xl leading-6">{subtitle}
       </p>

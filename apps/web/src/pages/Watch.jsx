@@ -19,6 +19,8 @@ export default function Watch() {
   const [isPortrait, setIsPortrait] = useState(false);
   const [full, setFull] = useState(false);
   const [needsPlay, setNeedsPlay] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const [laser, setLaser] = useState(false);
   const [pointer, setPointer] = useState(null);
   const [lastReaction, setLastReaction] = useState(null);
@@ -26,16 +28,20 @@ export default function Watch() {
   const stageRef = useRef(null);
   const videoRef = useRef(null);
   const lastPointerAt = useRef(0);
-  const live = bridge.status === 'streaming';
+  const live = bridge.status === 'streaming' && videoReady;
   const connected = !!bridge.remoteStream;
+  const canInteract = live && connected;
   const showPortraitCanvas = connected && isPortrait && tvCanvas && !rotated && fit === 'contain';
-  const canPoint = connected && laser && !rotated && fit === 'contain';
+  const canPoint = canInteract && laser && !rotated && fit === 'contain';
   const valid = code.length === 8;
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     video.srcObject = bridge.remoteStream || null;
+    setVideoReady(false);
+    setAudioEnabled(false);
+    video.muted = true; // iPhone Safari permits muted inline autoplay; sound requires a tap.
     if (bridge.remoteStream) video.play().then(() => setNeedsPlay(false)).catch(() => setNeedsPlay(true));
     else { setIsPortrait(false); setNeedsPlay(false); }
   }, [bridge.remoteStream]);
@@ -88,15 +94,22 @@ export default function Watch() {
     else { setRotated(false); setFit('contain'); }
     setLaser(v=>!v);
   }
-  function reactTo(emoji) { bridge.reactTo(emoji); setLastReaction(emoji); }
+  function reactTo(emoji) { if (!canInteract) return; bridge.reactTo(emoji); setLastReaction(emoji); }
+  async function enableAudio() {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = false;
+    try { await video.play(); setAudioEnabled(true); }
+    catch { video.muted = true; bridge.setError('Your browser blocked sound. Tap Enable sound again.'); }
+  }
   function rotateScreen() { if (laser) { setLaser(false); clearPointer(); } setRotated(v=>!v); }
 
-  return <main className="wrap py-11 pb-24">
+  return <main className="wrap min-w-0 pt-6 sm:pt-11 pb-24">
     <WorkspaceHead eyebrow="02 / VIEWER STUDIO" title="Watch a screen." subtitle="A better view on any display. Your connection is always approved by the sharer." online={bridge.online}/>
-    <div className="grid lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,.85fr)] gap-5 items-start">
-      <div className="min-w-0">
+    <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,.85fr)] gap-4 sm:gap-5 items-start">
+      <div className="min-w-0 order-2 lg:order-1">
         <section className="card-dark p-3 sm:p-4">
-          <div className="flex justify-between items-center pb-3 px-1 gap-3">
+          <div className="flex flex-wrap justify-between items-center pb-3 px-1 gap-2">
             <span className="flex gap-2 items-center text-xs font-semibold text-[#BBC7BF]"><MonitorPlay size={16}/> INCOMING SCREEN</span>
             <SessionStamp mode="viewer" live={live}/>
           </div>
@@ -115,7 +128,10 @@ export default function Watch() {
             </div>}
             <video
               ref={videoRef}
-              autoPlay playsInline controls={false}
+              autoPlay playsInline muted={!audioEnabled} controls={false}
+              onPlaying={event=>{if(event.currentTarget.videoWidth>0 && event.currentTarget.readyState>=2){setVideoReady(true);bridge.confirmVideo();}}}
+              onWaiting={()=>setVideoReady(false)}
+              onError={()=>{setVideoReady(false);bridge.setError('Video playback failed in this browser. Try restarting the session.');}}
               className={'incoming-video ' + (!connected ? 'hidden' : '') + (showPortraitCanvas?' portrait-video':'')}
               style={rotated ? {objectFit:fit,width:`${stageSize.height}px`,height:`${stageSize.width}px`,left:'50%',top:'50%',inset:'auto',transform:'translate(-50%,-50%) rotate(90deg)'} : {objectFit:fit}}
               onLoadedMetadata={event=>setIsPortrait(event.currentTarget.videoHeight>event.currentTarget.videoWidth)}
@@ -126,37 +142,39 @@ export default function Watch() {
               <p className="text-[#92A097] text-sm leading-6 mt-3">Enter a code, wait for approval, and watch the other screen arrive here.</p>
             </div>}
             {needsPlay && connected && <button className="absolute z-30 bg-acid text-ink rounded-lg px-5 py-3 font-semibold" onClick={play}>Tap to play video</button>}
-            {connected && <div className="absolute top-3 right-3 z-20 bg-[#121919]/90 border border-[#48534B] px-2 py-1 text-[10px] font-semibold rounded flex items-center gap-1.5 text-acid"><span className="w-1.5 h-1.5 bg-acid rounded-full"/>LIVE</div>}
+            {live && <div className="absolute top-3 right-3 z-20 bg-[#121919]/90 border border-[#48534B] px-2 py-1 text-[10px] font-semibold rounded flex items-center gap-1.5 text-acid"><span className="w-1.5 h-1.5 bg-acid rounded-full"/>LIVE</div>}
+            {connected && !live && !needsPlay && <div className="absolute inset-x-3 bottom-10 text-center z-20 text-xs text-[#D9E5DC] bg-[#101718]/90 border border-[#36443D] rounded-lg p-3">{bridge.status==='failed'?'The video path failed. A TURN relay may be required for mobile data or restricted Wi-Fi.':'Screen connected. Waiting for the first video frames…'}</div>}
             {canPoint && pointer && <PointerSpot pointer={pointer} stageRef={stageRef} videoRef={videoRef}/>}
             <ReactionToast item={bridge.reaction}/>
-            {connected && <div className="tv-overlay-bottom" aria-hidden="true">{isPortrait ? 'PORTRAIT SIGNAL' : 'WIDESCREEN SIGNAL'} <span>·</span> ENCRYPTED VIEW</div>}
+            {live && <div className="tv-overlay-bottom" aria-hidden="true">{isPortrait ? 'PORTRAIT SIGNAL' : 'WIDESCREEN SIGNAL'} <span>·</span> ENCRYPTED VIEW</div>}
           </div>
           <div className="mt-4 flex flex-wrap justify-between items-center gap-2 px-1">
             <div className="flex flex-wrap gap-2">
-              <button disabled={!connected} onClick={()=>{setLaser(false);clearPointer();setFit(v=>v==='contain'?'cover':'contain');}} className="btn btn-quiet !px-3 !py-2 !text-xs" title={fit==='contain'?'Show full image':'Crop to fill the stage'}><Expand size={13}/>{fit==='contain'?'Fit':'Fill (crop)'}</button>
-              <button disabled={!connected} onClick={rotateScreen} className={'btn !px-3 !py-2 !text-xs '+(rotated?'btn-lime':'btn-quiet')} title="Rotate the received picture 90 degrees"><RotateCw size={14}/>Rotate</button>
-              <button disabled={!connected} onClick={()=>setTvCanvas(v=>!v)} className={'btn !px-3 !py-2 !text-xs '+(tvCanvas?'btn-lime':'btn-quiet')} title="Use side canvas to center portrait screens on wide monitors"><Monitor size={14}/>TV canvas</button>
-              <button disabled={!connected} onClick={switchLaser} aria-pressed={laser} className={'btn !px-3 !py-2 !text-xs '+(laser?'btn-lime':'btn-quiet')}><Hand size={14}/>{laser?'Pointer on':'Point'}</button>
-              <button disabled={!connected} onClick={fullscreen} className="btn btn-quiet !px-3 !py-2 !text-xs">{full?<Minimize size={14}/>:<Maximize size={14}/>}Fullscreen</button>
+              <button disabled={!canInteract} onClick={()=>{setLaser(false);clearPointer();setFit(v=>v==='contain'?'cover':'contain');}} className="btn btn-quiet !px-3 !py-2 !text-xs" title={fit==='contain'?'Show full image':'Crop to fill the stage'}><Expand size={13}/>{fit==='contain'?'Fit':'Fill (crop)'}</button>
+              <button disabled={!canInteract} onClick={rotateScreen} className={'btn !px-3 !py-2 !text-xs '+(rotated?'btn-lime':'btn-quiet')} title="Rotate the received picture 90 degrees"><RotateCw size={14}/>Rotate</button>
+              <button disabled={!canInteract} onClick={()=>setTvCanvas(v=>!v)} className={'btn !px-3 !py-2 !text-xs '+(tvCanvas?'btn-lime':'btn-quiet')} title="Use side canvas to center portrait screens on wide monitors"><Monitor size={14}/>TV canvas</button>
+              <button disabled={!canInteract} onClick={switchLaser} aria-pressed={laser} className={'btn !px-3 !py-2 !text-xs '+(laser?'btn-lime':'btn-quiet')}><Hand size={14}/>{laser?'Pointer on':'Point'}</button>
+              <button disabled={!canInteract} onClick={fullscreen} className="btn btn-quiet !px-3 !py-2 !text-xs">{full?<Minimize size={14}/>:<Maximize size={14}/>}Fullscreen</button>
             </div>
             {!['idle','ended'].includes(bridge.status) && <button onClick={bridge.stop} className="btn btn-line !px-3 !py-2 !text-xs"><X size={14}/> Leave</button>}
           </div>
+          {live && bridge.remoteStream?.getAudioTracks()?.length>0 && !audioEnabled && <button className="btn btn-quiet mt-3 !text-xs" onClick={enableAudio}>Enable sound</button>}
           <p className="text-[#809087] text-[11px] leading-5 mt-3 px-1">TV canvas centers portrait screens on wide displays. Rotate fixes sideways video; Fill crops edges. Point lets you guide the sharer without remote control.</p>
         </section>
-        {connected && <section className="card-slate mt-4 p-4 flex flex-wrap items-center gap-2 sm:gap-4" aria-label="Send a reaction"><span className="text-[10px] uppercase tracking-[.18em] text-[#91A096] font-bold mr-1">Quick reactions</span>{EMOJI.map(emoji=><button key={emoji} type="button" onClick={()=>reactTo(emoji)} aria-label={`Send ${emoji} reaction`} className={'reaction-button '+(lastReaction===emoji?'reaction-sent':'')}>{emoji}</button>)}<span className="text-[#73867A] text-[10px] sm:ml-auto">Only your approved partner sees these</span></section>}
-        <div className="grid sm:grid-cols-3 gap-3 mt-5">{[{label:'Current frame rate',value:bridge.stats.fps==='—'?'—':bridge.stats.fps+' fps',icon:Video},{label:'Receiving bitrate',value:bridge.stats.bitrate,icon:Signal},{label:'Network round trip',value:bridge.stats.latency,icon:Radio}].map(item=><div key={item.label} className="card-slate px-4 py-5"><item.icon size={18} className="text-acid mb-3"/><div className="text-[#8B9B92] text-[10px] font-bold uppercase tracking-[.1em]">{item.label}</div><div className="font-display text-xl font-semibold mt-1">{item.value}</div></div>)}</div>
+        {canInteract && <section className="card-slate mt-4 p-4 flex flex-wrap items-center gap-2 sm:gap-4" aria-label="Send a reaction"><span className="text-[10px] uppercase tracking-[.18em] text-[#91A096] font-bold mr-1">Quick reactions</span>{EMOJI.map(emoji=><button key={emoji} type="button" onClick={()=>reactTo(emoji)} aria-label={`Send ${emoji} reaction`} className={'reaction-button '+(lastReaction===emoji?'reaction-sent':'')}>{emoji}</button>)}<span className="text-[#73867A] text-[10px] sm:ml-auto">Only your approved partner sees these</span></section>}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mt-4 sm:mt-5">{[{label:'Current frame rate',value:bridge.stats.fps==='—'?'—':bridge.stats.fps+' fps',icon:Video},{label:'Receiving bitrate',value:bridge.stats.bitrate,icon:Signal},{label:'Network round trip',value:bridge.stats.latency,icon:Radio}].map(item=><div key={item.label} className="card-slate px-4 py-5"><item.icon size={18} className="text-acid mb-3"/><div className="text-[#8B9B92] text-[10px] font-bold uppercase tracking-[.1em]">{item.label}</div><div className="font-display text-xl font-semibold mt-1">{item.value}</div></div>)}</div>
       </div>
-      <aside className="space-y-4">
+      <aside className="mobile-join min-w-0 order-1 lg:order-2 space-y-4">
         <section className="panel-section">
-          <div className="flex justify-between items-center mb-5"><h2 className="font-display text-xl font-semibold">Join a room</h2><span className="text-[#91A096] text-xs">Secure pairing</span></div>
+          <div className="flex flex-wrap justify-between gap-2 items-center mb-5"><h2 className="font-display text-xl font-semibold">Join a room</h2><span className="text-[#91A096] text-xs">Secure pairing</span></div>
           <form onSubmit={async e=>{e.preventDefault();await bridge.request(code,name);}}>
             <label className="block text-[11px] font-bold uppercase tracking-widest text-[#96A49A] mb-2" htmlFor="viewer-name">Your display name</label>
-            <input id="viewer-name" className="input-dark w-full py-3 px-4 text-sm mb-4" placeholder="e.g. Living room TV" value={name} onChange={e=>setName(e.target.value)} maxLength={38} autoComplete="nickname" disabled={!['idle','ended','declined','disconnected','failed'].includes(bridge.status)}/>
+            <input id="viewer-name" className="input-dark w-full min-w-0 max-w-full py-3 px-4 text-sm mb-4" placeholder="e.g. Living room TV" value={name} onChange={e=>setName(e.target.value)} maxLength={38} autoComplete="nickname" disabled={!['idle','ended','declined','disconnected','failed'].includes(bridge.status)}/>
             <label className="block text-[11px] font-bold uppercase tracking-widest text-[#96A49A] mb-2" htmlFor="viewer-code">Invitation code</label>
-            <input id="viewer-code" inputMode="text" className="input-dark block w-full px-4 py-4 text-center code-display text-2xl sm:text-3xl" placeholder="ABCD-EFGH" maxLength={9} value={code.length>4?code.slice(0,4)+'-'+code.slice(4):code} onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8))} disabled={!['idle','ended','declined','disconnected','failed'].includes(bridge.status)}/>
-            <div className="mt-4">{['idle','ended','declined','disconnected','failed'].includes(bridge.status)?<button type="submit" disabled={!bridge.online||!valid} className="btn btn-lime w-full">Request to watch <ArrowUpRight size={17}/></button>:<div className="flex items-center gap-3 bg-[#26322B] text-[#D1E4BA] border border-[#405640] rounded-xl px-4 py-4 text-sm"><span className="w-2 h-2 bg-acid rounded-full animate-pulse"/><span>{bridge.status==='pending'?'Request sent. Waiting for approval…':bridge.status==='waiting-screen'?'Approved! Waiting for the screen…':bridge.status==='connecting'?'Establishing video connection…':bridge.status==='reconnecting'?'Trying to reconnect video…':bridge.status==='streaming'?'Connected! You are watching live.':'Connecting…'}</span></div>}</div>
+            <input id="viewer-code" inputMode="text" className="input-dark block w-full min-w-0 max-w-full px-2 sm:px-4 py-4 text-center code-display text-[clamp(1.25rem,7vw,1.875rem)]" placeholder="ABCD-EFGH" maxLength={9} value={code.length>4?code.slice(0,4)+'-'+code.slice(4):code} onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8))} disabled={!['idle','ended','declined','disconnected','failed'].includes(bridge.status)}/>
+            <div className="mt-4">{bridge.status==='failed'?<button type="button" className="btn btn-lime w-full" onClick={bridge.stop}>Reset connection to retry</button>:['idle','ended','declined','disconnected'].includes(bridge.status)?<button type="submit" disabled={!bridge.online||!valid} className="btn btn-lime w-full">Request to watch <ArrowUpRight size={17}/></button>:<div className="flex items-center gap-3 bg-[#26322B] text-[#D1E4BA] border border-[#405640] rounded-xl px-4 py-4 text-sm"><span className="w-2 h-2 bg-acid rounded-full animate-pulse"/><span>{bridge.status==='pending'?'Request sent. Waiting for approval…':bridge.status==='waiting-screen'?'Approved! Waiting for the screen…':bridge.status==='connecting'?'Establishing video connection…':bridge.status==='reconnecting'?'Trying to reconnect video…':bridge.status==='streaming'?'Connected! You are watching live.':'Connecting…'}</span></div>}</div>
           </form>
-          {bridge.error && <div className="toast-error mt-4" role="alert">{bridge.error}</div>}
+          {bridge.error && <div className="toast-error mt-4" role="alert">{bridge.error}{bridge.status==='failed' && !bridge.turnConfigured && <p className="mt-2 text-xs">Signaling is online, but this connection has no TURN relay configured. Different mobile networks may block direct WebRTC video.</p>}</div>}
           <p className="text-[#8A998F] text-[11px] leading-5 mt-4">The sharer must approve you before any screen data is transmitted.</p>
         </section>
         <section className="panel-section">
