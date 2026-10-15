@@ -39,35 +39,61 @@ export default function Watch() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    let disposed = false, frameId;
+    const videoTrack = bridge.remoteVideoTrack;
+    const audioTrack = bridge.remoteAudioTrack;
     const stream = bridge.remoteStream;
-    video.srcObject = stream || null;
-    video.muted = true;
+    let disposed = false;
+    let frameId;
     setVideoReady(false);
     setAudioEnabled(false);
-    const markReady = () => {
-      if (!disposed && video.srcObject === stream) {
+    video.muted = true;
+    video.srcObject = null;
+
+    // LiveKit manages its subscribed video track through attach()/detach().
+    // Assigning a bare mediaStreamTrack while adaptive streaming is active can
+    // leave the video paused at the SFU, particularly on mobile Safari.
+    try {
+      if (videoTrack) {
+        videoTrack.attach(video);
+        if (audioTrack) audioTrack.attach(video);
+      } else if (stream) {
+        video.srcObject = stream;
+      }
+    } catch (e) {
+      bridge.setError('Unable to attach the received LiveKit screen: ' + (e.message || String(e)));
+    }
+
+    const firstFrame = () => {
+      if (disposed || !videoTrack || video.videoWidth <= 0 || video.readyState < 2) return;
+      setVideoReady(true);
+      setNeedsPlay(false);
+      bridge.confirmVideo();
+    };
+    const fallback = () => {
+      if (!video.requestVideoFrameCallback && video.videoWidth > 0 && video.readyState >= 2) {
         setVideoReady(true);
-        setNeedsPlay(false);
         bridge.confirmVideo();
       }
     };
-    const fallback = () => {
-      if (!video.requestVideoFrameCallback && video.videoWidth > 0 && video.readyState >= 2) markReady();
-    };
-    if (stream) {
-      if (video.requestVideoFrameCallback) frameId = video.requestVideoFrameCallback(markReady);
+    if (videoTrack || stream) {
+      if (video.requestVideoFrameCallback) frameId = video.requestVideoFrameCallback(firstFrame);
       video.addEventListener('loadeddata', fallback);
       video.addEventListener('timeupdate', fallback);
       video.play().then(() => setNeedsPlay(false)).catch(() => setNeedsPlay(true));
-    } else { setIsPortrait(false); setNeedsPlay(false); }
+    } else {
+      setIsPortrait(false);
+      setNeedsPlay(false);
+    }
     return () => {
       disposed = true;
       if (frameId != null) video.cancelVideoFrameCallback?.(frameId);
       video.removeEventListener('loadeddata', fallback);
       video.removeEventListener('timeupdate', fallback);
+      try { audioTrack?.detach(video); } catch {}
+      try { videoTrack?.detach(video); } catch {}
+      video.srcObject = null;
     };
-  }, [bridge.remoteStream]);
+  }, [bridge.remoteVideoTrack, bridge.remoteAudioTrack, bridge.remoteStream]);
   useEffect(() => {
     if (videoReady || !['pending','waiting-screen','connecting','reconnecting'].includes(bridge.status)) {
       setWaitSeconds(0);
