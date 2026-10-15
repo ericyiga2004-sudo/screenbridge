@@ -169,12 +169,13 @@ export default function Watch() {
             />
             {!connected && <div className="text-center px-6 max-w-sm z-10">
               <div className="inline-flex w-20 h-20 bg-[#26302F] text-acid border border-[#43534A] rounded-2xl items-center justify-center mb-6"><MonitorPlay size={36} strokeWidth={1.5}/></div>
-              <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-[-.05em]">Your window to anywhere.</h2>
-              <p className="text-[#92A097] text-sm leading-6 mt-3">Enter a code, wait for approval, and watch the other screen arrive here.</p>
+              <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-[-.05em]">{bridge.status === 'waiting-screen' ? 'Waiting for the sharer.' : bridge.status === 'connecting' ? 'Connecting to video.' : 'Your window to anywhere.'}</h2>
+              <p className="text-[#92A097] text-sm leading-6 mt-3">{bridge.status === 'waiting-screen' ? 'Approved. On the laptop, click Choose screen & go live and pick a screen in Chrome.' : bridge.status === 'connecting' ? 'Connecting to the secure LiveKit video server.' : 'Enter a code, wait for approval, and watch the other screen arrive here.'}</p>
+              {waitSeconds >= 25 && ['waiting-screen','connecting','reconnecting'].includes(bridge.status) && <p role="status" className="mt-4 rounded-lg border border-[#796B41] bg-[#302B20] p-3 text-xs text-[#F3DEA6] leading-5">Still waiting after {waitSeconds} seconds. Check the laptop: is the screen preview moving? If not, click Choose screen & go live. If it is moving, leave and start a fresh session.</p>}
             </div>}
             {needsPlay && connected && <button className="absolute z-30 bg-acid text-ink rounded-lg px-5 py-3 font-semibold" onClick={play}>Tap to play video</button>}
             {live && <div className="absolute top-3 right-3 z-20 bg-[#121919]/90 border border-[#48534B] px-2 py-1 text-[10px] font-semibold rounded flex items-center gap-1.5 text-acid"><span className="w-1.5 h-1.5 bg-acid rounded-full"/>LIVE</div>}
-            {connected && !live && !needsPlay && <div className="absolute inset-x-3 bottom-10 text-center z-20 text-xs text-[#D9E5DC] bg-[#101718]/90 border border-[#36443D] rounded-lg p-3">{bridge.status==='failed'?'LiveKit media connection failed. Try starting a fresh approved session.':'Media connected. Waiting for the first screen frames…'}</div>}
+            {connected && !live && !needsPlay && <div className="absolute inset-x-3 bottom-10 text-center z-20 text-xs text-[#D9E5DC] bg-[#101718]/90 border border-[#36443D] rounded-lg p-3">{waitSeconds >= 25 ? 'A video track arrived, but no playable frames have appeared. Check that the laptop is broadcasting; otherwise restart the session.' : bridge.status==='failed'?'LiveKit media connection failed. Try starting a fresh approved session.':'Video track received. Waiting for the first playable frames…'}</div>}
             {canPoint && pointer && <PointerSpot pointer={pointer} stageRef={stageRef} videoRef={videoRef}/>}
             <ReactionToast item={bridge.reaction}/>
             {live && <div className="tv-overlay-bottom" aria-hidden="true">{isPortrait ? 'PORTRAIT SIGNAL' : 'WIDESCREEN SIGNAL'} <span>·</span> ENCRYPTED VIEW</div>}
