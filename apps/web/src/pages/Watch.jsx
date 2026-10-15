@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useBridge } from '../hooks/useBridge';
 import { WorkspaceHead, SessionStamp } from '../components/Status';
 import { pointInVideo } from '../lib/videoGeometry';
+import MediaDiagnostics from '../components/MediaDiagnostics';
 import PointerSpot from '../components/PointerSpot';
 import ReactionToast from '../components/ReactionToast';
 
@@ -31,6 +32,7 @@ export default function Watch() {
   const audioRef = useRef(null);
   const [playbackInfo, setPlaybackInfo] = useState({ready:0, paused:true, size:'—', frames:'—'});
   const lastPointerAt = useRef(0);
+  const presentedRef=useRef(null);
   const live = bridge.status === 'streaming' && videoReady;
   const connected = !!bridge.remoteStream;
   const canInteract = live && connected;
@@ -45,6 +47,7 @@ export default function Watch() {
     const track = bridge.remoteVideoTrack;
     let disposed = false;
     let frameId;
+    presentedRef.current=null;
     setVideoReady(false);
     setNeedsPlay(false);
     video.muted = true;
@@ -62,10 +65,13 @@ export default function Watch() {
     if (track) {
       try {
         track.attach(video);
-        if (video.requestVideoFrameCallback) frameId = video.requestVideoFrameCallback(markReady);
+        if (video.requestVideoFrameCallback) {
+          const frame=(_now,metadata)=>{if(disposed)return;presentedRef.current=metadata.presentedFrames;markReady();frameId=video.requestVideoFrameCallback(frame);};
+          frameId=video.requestVideoFrameCallback(frame);
+        }
         video.addEventListener('loadeddata', fallback);
         video.addEventListener('timeupdate', fallback);
-        video.play().then(() => setNeedsPlay(false)).catch(() => setNeedsPlay(true));
+        video.play().then(() => {if(!disposed)setNeedsPlay(false);}).catch(() => {if(!disposed)setNeedsPlay(true);});
       } catch (err) {
         bridge.setError('Safari cannot attach the incoming video: ' + (err.message || String(err)));
       }
@@ -113,6 +119,7 @@ export default function Watch() {
       setPlaybackInfo({
         ready:video.readyState,
         paused:video.paused,
+        presented:presentedRef.current,
         size:video.videoWidth && video.videoHeight ? video.videoWidth+' × '+video.videoHeight : '—',
         frames:typeof quality?.totalVideoFrames === 'number' ? String(quality.totalVideoFrames) : 'Unavailable'
       });
@@ -152,7 +159,9 @@ export default function Watch() {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
       else {
-        await stageRef.current.requestFullscreen();
+        if(stageRef.current.requestFullscreen)await stageRef.current.requestFullscreen();
+        else if(videoRef.current?.webkitEnterFullscreen)videoRef.current.webkitEnterFullscreen();
+        else throw Error('Fullscreen unavailable');
         try { await screen.orientation?.lock?.('landscape'); } catch { /* browser/OS restriction */ }
       }
     } catch { bridge.setError('Fullscreen is unavailable here. On iPhone, rotate manually or use Add to Home Screen.'); }
@@ -214,9 +223,10 @@ export default function Watch() {
               ref={videoRef}
               autoPlay playsInline muted controls={false}
               onPlaying={event=>{if(event.currentTarget.videoWidth>0 && event.currentTarget.readyState>=2){setVideoReady(true);bridge.confirmVideo();}}}
-              onWaiting={()=>setVideoReady(false)}
+              onWaiting={()=>{setVideoReady(false);bridge.waitForVideo();}}
+              onPause={()=>{setVideoReady(false);setNeedsPlay(true);bridge.waitForVideo();}}
               onError={()=>{setVideoReady(false);bridge.setError('Video playback failed in this browser. Try restarting the session.');}}
-              className={'incoming-video ' + (!connected ? 'hidden' : '') + (showPortraitCanvas?' portrait-video':'')}
+              className={'incoming-video ' + (showPortraitCanvas?' portrait-video':'')}
               style={rotated ? {objectFit:fit,width:`${stageSize.height}px`,height:`${stageSize.width}px`,left:'50%',top:'50%',inset:'auto',transform:'translate(-50%,-50%) rotate(90deg)'} : {objectFit:fit}}
               onLoadedMetadata={event=>setIsPortrait(event.currentTarget.videoHeight>event.currentTarget.videoWidth)}
             />
@@ -246,6 +256,8 @@ export default function Watch() {
           </div>
           {live && bridge.remoteAudioTrack && !audioEnabled && <button className="btn btn-quiet mt-3 !text-xs" onClick={enableAudio}>Enable sound</button>}
           {connected && !videoReady && waitSeconds >= 8 && <div role="status" className="mt-3 p-3 rounded-lg bg-[#222B29] border border-[#4B5A51] text-xs text-[#D4E0D8] leading-5">iPhone video diagnostic: {playbackInfo.size} · playback {playbackInfo.paused ? 'paused' : 'running'} · readyState {playbackInfo.ready} · frames {playbackInfo.frames}. Tap to start video above. If it remains blank, send me these values.</div>}
+          <MediaDiagnostics bridge={bridge} playback={playbackInfo}/>
+          {connected && <button type="button" onClick={play} className="btn btn-quiet mt-3 !text-xs">Resume video</button>}
           <p className="text-[#809087] text-[11px] leading-5 mt-3 px-1">TV canvas centers portrait screens on wide displays. Rotate fixes sideways video; Fill crops edges. Point lets you guide the sharer without remote control.</p>
         </section>
         {canInteract && <section className="card-slate mt-4 p-4 flex flex-wrap items-center gap-2 sm:gap-4" aria-label="Send a reaction"><span className="text-[10px] uppercase tracking-[.18em] text-[#91A096] font-bold mr-1">Quick reactions</span>{EMOJI.map(emoji=><button key={emoji} type="button" onClick={()=>reactTo(emoji)} aria-label={`Send ${emoji} reaction`} className={'reaction-button '+(lastReaction===emoji?'reaction-sent':'')}>{emoji}</button>)}<span className="text-[#73867A] text-[10px] sm:ml-auto">Only your approved partner sees these</span></section>}

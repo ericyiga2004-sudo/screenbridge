@@ -6,6 +6,7 @@ import Header from './components/Header';
 import Home from './pages/Home';
 import Share from './pages/Share';
 import Watch from './pages/Watch';
+import MinimalWatch from './pages/MinimalWatch';
 import How from './pages/How';
 function App() {  
 return <div className="min-h-screen">
@@ -13,6 +14,7 @@ return <div className="min-h-screen">
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/share" element={<Share />} />
+      <Route path="/watch/minimal" element={<MinimalWatch />} />
       <Route path="/watch" element={<Watch />} />
       <Route path="/how" element={<How />} />
       <Route path="*" element={<Home />} />

@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Room,RoomEvent,Track,ConnectionState,ScreenSharePresets} from 'livekit-client';
+import {readInboundReport,roomSnapshot} from '../lib/mediaDiagnostics';
 import {createSocket,emitAck,fetchMediaStatus} from '../lib/socket';
 
 // All media passes through LiveKit. Socket.IO remains for explicit pairing approval.
@@ -14,13 +15,14 @@ export function useBridge(role){
  const [remotePointer,setRemotePointer]=useState(null),[reaction,setReaction]=useState(null);
  const [stats,setStats]=useState({fps:'—',bitrate:'—',latency:'—',quality:'Waiting'});
  const [peerState,setPeerState]=useState('new');
+ const [diagnostics,setDiagnostics]=useState({connection:'disconnected',participants:0,publication:false});
  const resetMedia=useCallback(()=>{
   clearInterval(statTimer.current);statTimer.current=null;priorBytes.current=null;
   const room=roomRef.current;roomRef.current=null;
   if(room){room.removeAllListeners();void room.disconnect();}
   localTrackRef.current=null;received.current={video:null,audio:null};
   setLocalStream(null);setRemoteStream(null);setRemoteVideoTrack(null);setRemoteAudioTrack(null);setPeerState('new');
-  setRemotePointer(null);setReaction(null);
+  setRemotePointer(null);setReaction(null);setDiagnostics({connection:'disconnected',participants:0,publication:false});
   setStats({fps:'—',bitrate:'—',latency:'—',quality:'Waiting'});
  },[]);
  const stop=useCallback(()=>{
@@ -35,6 +37,9 @@ export function useBridge(role){
   // forwarding based on element visibility for this one-viewer experience.
   const room=new Room({adaptiveStream:false,dynacast:true});
   roomRef.current=room;
+  const snapshot=()=>{if(roomRef.current===room)setDiagnostics(d=>({...d,...roomSnapshot(room)}));};
+  for(const event of [RoomEvent.ConnectionStateChanged,RoomEvent.ParticipantConnected,RoomEvent.ParticipantDisconnected,RoomEvent.TrackPublished,RoomEvent.TrackUnpublished,RoomEvent.TrackSubscriptionStatusChanged,RoomEvent.TrackSubscriptionPermissionChanged])room.on(event,snapshot);
+  room.on(RoomEvent.TrackSubscriptionFailed,()=>{if(roomRef.current===room)setError('LiveKit could not subscribe to the screen video. See media diagnostics.');});
   function updateStream(){
    const tracks=[received.current.video?.mediaStreamTrack,received.current.audio?.mediaStreamTrack]
      .filter(t=>t?.readyState==='live');
@@ -69,13 +74,21 @@ export function useBridge(role){
    await Promise.race([room.connect(media.url,media.token,{autoSubscribe:true}),new Promise((_,reject)=>{connectionTimer=setTimeout(()=>reject(new Error('Media connection timed out after 25 seconds. Check LiveKit status and try again.')),25000);})]);
    clearTimeout(connectionTimer);
    if(roomRef.current!==room){void room.disconnect();return;}
-   setPeerState('connected');setError('');setStatus(role==='host'?'ready':'waiting-screen');
+   setPeerState('connected');setError('');snapshot();setStatus(s=>role==='host'?'ready':s==='streaming'?s:received.current.video?'connecting':'waiting-screen');
    statTimer.current=setInterval(async()=>{
+    if(roomRef.current!==room)return;
+    snapshot();
     if(room.state!==ConnectionState.Connected)return;
     const track=role==='host'?localTrackRef.current:received.current.video;
     if(!track)return;
     try{
      const data=role==='host'?(await track.getSenderStats?.())?.[0]:await track.getReceiverStats?.();
+     if(roomRef.current!==room)return;
+     if(role==='viewer'){
+      const report=await track.getRTCStatsReport?.();
+      if(roomRef.current!==room||received.current.video!==track)return;
+      setDiagnostics(d=>({...d,...roomSnapshot(room),...readInboundReport(report)}));
+     }
      const bytes=data?.bytesSent??data?.bytesReceived;
      let bitrate='—';
      if(typeof bytes==='number'){
@@ -143,8 +156,8 @@ export function useBridge(role){
   const room=roomRef.current;
   if(!room||room.state!==ConnectionState.Connected){setError('Wait for LiveKit to connect after approving the viewer.');return;}
   try{
-   const preset=quality==='smooth'?ScreenSharePresets.h720fps30:ScreenSharePresets.h1080fps30;
-   await room.localParticipant.setScreenShareEnabled(true,{audio:true,resolution:{...preset.resolution,frameRate:quality==='sharp'?15:30}});
+   const preset=['smooth','compatible'].includes(quality)?ScreenSharePresets.h720fps30:ScreenSharePresets.h1080fps30;
+   await room.localParticipant.setScreenShareEnabled(true,{audio:true,resolution:{...preset.resolution,frameRate:['sharp','compatible'].includes(quality)?15:30}},quality==='compatible'?{videoCodec:'h264',simulcast:false,backupCodec:false,screenShareEncoding:{maxBitrate:1500000,maxFramerate:15}}:undefined);
    const track=room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track;
    if(!track?.mediaStreamTrack)throw Error('The browser did not publish a screen track.');
    localTrackRef.current=track;setLocalStream(new MediaStream([track.mediaStreamTrack]));setStatus('streaming');
@@ -153,11 +166,12 @@ export function useBridge(role){
    },{once:true});
   }catch(e){setStatus('ready');setError(e.name==='NotAllowedError'?'Screen selection was cancelled or the browser denied capture.':'Unable to broadcast: '+(e.message||String(e)));}
  },[]);
+ const waitForVideo=useCallback(()=>{if(role==='viewer'&&received.current.video)setStatus('connecting');},[role]);
  const confirmVideo=useCallback(()=>{
   if(role==='viewer'&&roomRef.current?.state===ConnectionState.Connected)setStatus('streaming');
  },[role]);
  const point=useCallback((x,y,visible=true)=>{if(socket.connected&&role==='viewer')socket.emit('interaction:pointer',{x,y,visible});},[socket,role]);
  const reactTo=useCallback(emoji=>{if(socket.connected&&['👍','👏','❤️','💡','✨'].includes(emoji))socket.emit('interaction:reaction',{emoji});},[socket]);
- return {online,mediaConfigured,code,status,error,requests,stats,peerState,localStream,remoteStream,
- remotePointer,reaction,remoteVideoTrack,remoteAudioTrack,create,request,approve,decline,beginCapture,stop,confirmVideo,point,reactTo,setError};
+ return {online,mediaConfigured,code,status,error,requests,stats,diagnostics,peerState,localStream,remoteStream,
+ remotePointer,reaction,remoteVideoTrack,remoteAudioTrack,create,request,approve,decline,beginCapture,stop,confirmVideo,waitForVideo,point,reactTo,setError};
 }

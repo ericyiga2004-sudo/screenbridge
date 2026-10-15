@@ -1,0 +1,302 @@
+// !$*UTF8*$!
+{
+"archiveVersion" = 1;
+"classes" = {
+
+};
+"objectVersion" = 56;
+"objects" = {
+"3F81C9F36018F0138A247ECE" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "ScreenBridge/ScreenBridgeApp.swift";
+"sourceTree" = "<group>";
+};
+"D8182C4DC27597247508CBAC" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "ScreenBridge/BroadcastSession.swift";
+"sourceTree" = "<group>";
+};
+"2345ABCC5E72A4C716D55D3D" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "BroadcastExtension/SampleHandler.swift";
+"sourceTree" = "<group>";
+};
+"8BCD5BC4CDFDF0918087C782" = {
+"isa" = "PBXFileReference";
+"explicitFileType" = "wrapper.application";
+"path" = "ScreenBridge.app";
+"sourceTree" = "BUILT_PRODUCTS_DIR";
+"includeInIndex" = 0;
+};
+"7D47DE7E0202D59799F715BD" = {
+"isa" = "PBXFileReference";
+"explicitFileType" = "wrapper.app-extension";
+"path" = "ScreenBridgeBroadcast.appex";
+"sourceTree" = "BUILT_PRODUCTS_DIR";
+"includeInIndex" = 0;
+};
+"FBDC4F23F93125BBEEAE800C" = {
+"isa" = "PBXGroup";
+"children" = ("8BCD5BC4CDFDF0918087C782","7D47DE7E0202D59799F715BD");
+"name" = "Products";
+"sourceTree" = "<group>";
+};
+"F97E10D1020E3BEF961AF77B" = {
+"isa" = "PBXGroup";
+"children" = ("3F81C9F36018F0138A247ECE","D8182C4DC27597247508CBAC","2345ABCC5E72A4C716D55D3D","FBDC4F23F93125BBEEAE800C");
+"sourceTree" = "<group>";
+};
+"EA12ECEC8AC80BBAA95530E2" = {
+"isa" = "XCRemoteSwiftPackageReference";
+"repositoryURL" = "https://github.com/livekit/client-sdk-swift.git";
+"requirement" = {
+"kind" = "exactVersion";
+"version" = "2.9.0";
+};
+};
+"79164509E8F65C1DEE876019" = {
+"isa" = "XCRemoteSwiftPackageReference";
+"repositoryURL" = "https://github.com/socketio/socket.io-client-swift.git";
+"requirement" = {
+"kind" = "exactVersion";
+"version" = "16.1.1";
+};
+};
+"BFD315016DE16320F7E2120C" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"IPHONEOS_DEPLOYMENT_TARGET" = "15.0";
+"SDKROOT" = "iphoneos";
+"SWIFT_VERSION" = "5.0";
+"TARGETED_DEVICE_FAMILY" = "1,2";
+"CODE_SIGN_STYLE" = "Automatic";
+"SCREENBRIDGE_BUNDLE_ID" = "com.ericyiga.screenbridge";
+"SCREENBRIDGE_APP_GROUP" = "group.$(SCREENBRIDGE_BUNDLE_ID)";
+"CLANG_ENABLE_MODULES" = "YES";
+"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+};
+"name" = "Debug";
+};
+"1D8C0C6B1D22EA8C7669B263" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"IPHONEOS_DEPLOYMENT_TARGET" = "15.0";
+"SDKROOT" = "iphoneos";
+"SWIFT_VERSION" = "5.0";
+"TARGETED_DEVICE_FAMILY" = "1,2";
+"CODE_SIGN_STYLE" = "Automatic";
+"SCREENBRIDGE_BUNDLE_ID" = "com.ericyiga.screenbridge";
+"SCREENBRIDGE_APP_GROUP" = "group.$(SCREENBRIDGE_BUNDLE_ID)";
+"CLANG_ENABLE_MODULES" = "YES";
+"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+};
+"name" = "Release";
+};
+"5D7731714D3E69D68AA8D7ED" = {
+"isa" = "XCConfigurationList";
+"buildConfigurations" = ("BFD315016DE16320F7E2120C","1D8C0C6B1D22EA8C7669B263");
+"defaultConfigurationIsVisible" = 0;
+"defaultConfigurationName" = "Release";
+};
+"35F071278DC4B2532225B943" = {
+"isa" = "PBXContainerItemProxy";
+"containerPortal" = "F6F4DA8D93E88A08220E03B7";
+"proxyType" = 1;
+"remoteGlobalIDString" = "659087D3CA23DB6AE11E0A43";
+"remoteInfo" = "ScreenBridgeBroadcast";
+};
+"2FB32516A54A4E8721B5EDC9" = {
+"isa" = "PBXTargetDependency";
+"target" = "659087D3CA23DB6AE11E0A43";
+"targetProxy" = "35F071278DC4B2532225B943";
+};
+"B5F235D5B8CC63C82183E49E" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "7D47DE7E0202D59799F715BD";
+"settings" = {
+"ATTRIBUTES" = ("RemoveHeadersOnCopy");
+};
+};
+"CFFF27C96089B93150F3553B" = {
+"isa" = "PBXCopyFilesBuildPhase";
+"buildActionMask" = 2147483647;
+"dstPath" = "";
+"dstSubfolderSpec" = 13;
+"files" = ("B5F235D5B8CC63C82183E49E");
+"name" = "Embed App Extensions";
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"861B5C07E89AD47626DD5142" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "3F81C9F36018F0138A247ECE";
+};
+"3B2EBA29E231974B038B6B24" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "D8182C4DC27597247508CBAC";
+};
+"6805EC6AFDAFDBE18E2FF355" = {
+"isa" = "PBXSourcesBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ("861B5C07E89AD47626DD5142","3B2EBA29E231974B038B6B24");
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"3336B12F660A37779413FE5B" = {
+"isa" = "XCSwiftPackageProductDependency";
+"package" = "EA12ECEC8AC80BBAA95530E2";
+"productName" = "LiveKit";
+};
+"A6A150D74FDE8C68FF21D894" = {
+"isa" = "XCSwiftPackageProductDependency";
+"package" = "79164509E8F65C1DEE876019";
+"productName" = "SocketIO";
+};
+"C6C2219B327CCF231DB8183D" = {
+"isa" = "PBXBuildFile";
+"productRef" = "3336B12F660A37779413FE5B";
+};
+"FFDB1251745FE741DE66351B" = {
+"isa" = "PBXBuildFile";
+"productRef" = "A6A150D74FDE8C68FF21D894";
+};
+"0F91A57B11B30F1A7980649D" = {
+"isa" = "PBXFrameworksBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ("C6C2219B327CCF231DB8183D","FFDB1251745FE741DE66351B");
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"3A77CD648711364E9A877D62" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_BUNDLE_IDENTIFIER" = "$(SCREENBRIDGE_BUNDLE_ID)";
+"PRODUCT_NAME" = "ScreenBridge";
+"INFOPLIST_FILE" = "ScreenBridge/Info.plist";
+"CODE_SIGN_ENTITLEMENTS" = "ScreenBridge/ScreenBridge.entitlements";
+"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)","@executable_path/Frameworks");
+"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+};
+"name" = "Debug";
+};
+"066776A1C212750E8BE506A2" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_BUNDLE_IDENTIFIER" = "$(SCREENBRIDGE_BUNDLE_ID)";
+"PRODUCT_NAME" = "ScreenBridge";
+"INFOPLIST_FILE" = "ScreenBridge/Info.plist";
+"CODE_SIGN_ENTITLEMENTS" = "ScreenBridge/ScreenBridge.entitlements";
+"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)","@executable_path/Frameworks");
+"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+};
+"name" = "Release";
+};
+"B5E4F9F7C53A9A6AF99DBCE3" = {
+"isa" = "XCConfigurationList";
+"buildConfigurations" = ("3A77CD648711364E9A877D62","066776A1C212750E8BE506A2");
+"defaultConfigurationIsVisible" = 0;
+"defaultConfigurationName" = "Release";
+};
+"FC4A695F02A8A53A129DCB9A" = {
+"isa" = "PBXNativeTarget";
+"buildConfigurationList" = "B5E4F9F7C53A9A6AF99DBCE3";
+"buildPhases" = ("6805EC6AFDAFDBE18E2FF355","0F91A57B11B30F1A7980649D","CFFF27C96089B93150F3553B");
+"buildRules" = ();
+"dependencies" = ("2FB32516A54A4E8721B5EDC9");
+"name" = "ScreenBridge";
+"packageProductDependencies" = ("3336B12F660A37779413FE5B","A6A150D74FDE8C68FF21D894");
+"productName" = "ScreenBridge";
+"productReference" = "8BCD5BC4CDFDF0918087C782";
+"productType" = "com.apple.product-type.application";
+};
+"64E581E12BD7BDF17FBC71B5" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "2345ABCC5E72A4C716D55D3D";
+};
+"A9C3C25724A37277D01C5CAA" = {
+"isa" = "PBXSourcesBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ("64E581E12BD7BDF17FBC71B5");
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"E8F4C0AD2F32E80C78C1C194" = {
+"isa" = "XCSwiftPackageProductDependency";
+"package" = "EA12ECEC8AC80BBAA95530E2";
+"productName" = "LiveKit";
+};
+"71051168B3E9EBA2A91CE36A" = {
+"isa" = "PBXBuildFile";
+"productRef" = "E8F4C0AD2F32E80C78C1C194";
+};
+"BA91C634719A03148D9E3FF7" = {
+"isa" = "PBXFrameworksBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ("71051168B3E9EBA2A91CE36A");
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"9B475734F3F265A0FC74DC7C" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_BUNDLE_IDENTIFIER" = "$(SCREENBRIDGE_BUNDLE_ID).broadcast";
+"PRODUCT_NAME" = "ScreenBridgeBroadcast";
+"INFOPLIST_FILE" = "BroadcastExtension/Info.plist";
+"CODE_SIGN_ENTITLEMENTS" = "BroadcastExtension/ScreenBridge.entitlements";
+"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)","@executable_path/Frameworks","@executable_path/../../Frameworks");
+"APPLICATION_EXTENSION_API_ONLY" = "YES";
+"SKIP_INSTALL" = "YES";
+"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+};
+"name" = "Debug";
+};
+"B43284A5D86C0A29DADB08BA" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_BUNDLE_IDENTIFIER" = "$(SCREENBRIDGE_BUNDLE_ID).broadcast";
+"PRODUCT_NAME" = "ScreenBridgeBroadcast";
+"INFOPLIST_FILE" = "BroadcastExtension/Info.plist";
+"CODE_SIGN_ENTITLEMENTS" = "BroadcastExtension/ScreenBridge.entitlements";
+"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)","@executable_path/Frameworks","@executable_path/../../Frameworks");
+"APPLICATION_EXTENSION_API_ONLY" = "YES";
+"SKIP_INSTALL" = "YES";
+"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+};
+"name" = "Release";
+};
+"C284E1C6D31B9E48B335241A" = {
+"isa" = "XCConfigurationList";
+"buildConfigurations" = ("9B475734F3F265A0FC74DC7C","B43284A5D86C0A29DADB08BA");
+"defaultConfigurationIsVisible" = 0;
+"defaultConfigurationName" = "Release";
+};
+"659087D3CA23DB6AE11E0A43" = {
+"isa" = "PBXNativeTarget";
+"buildConfigurationList" = "C284E1C6D31B9E48B335241A";
+"buildPhases" = ("A9C3C25724A37277D01C5CAA","BA91C634719A03148D9E3FF7");
+"buildRules" = ();
+"dependencies" = ();
+"name" = "ScreenBridgeBroadcast";
+"packageProductDependencies" = ("E8F4C0AD2F32E80C78C1C194");
+"productName" = "ScreenBridgeBroadcast";
+"productReference" = "7D47DE7E0202D59799F715BD";
+"productType" = "com.apple.product-type.app-extension";
+};
+"F6F4DA8D93E88A08220E03B7" = {
+"isa" = "PBXProject";
+"attributes" = {
+"LastUpgradeCheck" = "1500";
+};
+"buildConfigurationList" = "5D7731714D3E69D68AA8D7ED";
+"compatibilityVersion" = "Xcode 14.0";
+"developmentRegion" = "en";
+"hasScannedForEncodings" = 0;
+"knownRegions" = ("en","Base");
+"mainGroup" = "F97E10D1020E3BEF961AF77B";
+"packageReferences" = ("EA12ECEC8AC80BBAA95530E2","79164509E8F65C1DEE876019");
+"productRefGroup" = "FBDC4F23F93125BBEEAE800C";
+"projectDirPath" = "";
+"projectRoot" = "";
+"targets" = ("FC4A695F02A8A53A129DCB9A","659087D3CA23DB6AE11E0A43");
+};
+};
+"rootObject" = "F6F4DA8D93E88A08220E03B7";
+}

@@ -125,7 +125,7 @@ const bridge = useBridge('host'); const [quality, setQuality] = useState('balanc
         </section>}{hasSession && ['ready', 'connecting', 'streaming', 'reconnecting'].includes(bridge.status) && <section className="panel-section">
           <h3 className="font-display text-lg font-semibold">Broadcast settings</h3>
           <p className="text-xs text-[#87958D] leading-5 mt-1 mb-4">Choose how you want to prioritize the stream.</p>
-          <div className="grid grid-cols-3 gap-2 mb-4">{[{ id: 'smooth', title: 'Smooth', sub: '720p · 30fps' }, { id: 'balanced', title: 'Balanced', sub: '30fps' }, { id: 'sharp', title: 'Sharp', sub: 'Text clarity' }].map(q =>
+          <div className="grid grid-cols-2 gap-2 mb-4">{[{ id: 'compatible', title: 'Compatibility', sub: 'H.264 · 720p · 15fps' }, { id: 'smooth', title: 'Smooth', sub: '720p · 30fps' }, { id: 'balanced', title: 'Balanced', sub: '30fps' }, { id: 'sharp', title: 'Sharp', sub: 'Text clarity' }].map(q =>
             <button key={q.id} disabled={!!bridge.localStream} onClick={() => setQuality(q.id)} className={'rounded-lg border px-2 py-3 text-center transition-colors ' + (quality === q.id ? 'border-acid text-acid bg-[#303A2A]' : 'border-[#394341] text-[#95A298]')}>
               <div className="text-xs font-semibold">{q.title}
               </div>
